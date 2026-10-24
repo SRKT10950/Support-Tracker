@@ -1,0 +1,15 @@
+services:
+  support-tracker:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: 8080
+      DB_API_KEY: ${DB_API_KEY:?Set DB_API_KEY in the deployment environment}
+      DB_DEVICE_SECURITY_KEY: ${DB_DEVICE_SECURITY_KEY:?Set DB_DEVICE_SECURITY_KEY in the deployment environment}
+      DB_DEVICE_NAME: ${DB_DEVICE_NAME:-SRKT-Laptop}
+      DB_LOCATION: ${DB_LOCATION:?Set DB_LOCATION to the server or deployment location}
+      DB_DEVICE_TYPE: ${DB_DEVICE_TYPE:-Desktop}
+      DB_APP_NAME: ${DB_APP_NAME:-Support Tracker}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+    restart: unless-stopped
