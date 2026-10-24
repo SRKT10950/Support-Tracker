@@ -1,0 +1,2557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Development Tracker</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-light: #eff6ff;
+      --primary-focus: rgba(37, 99, 235, 0.2);
+      --success: #16a34a;
+      --success-light: #f0fdf4;
+      --warning: #d97706;
+      --warning-light: #fffbeb;
+      --danger: #dc2626;
+      --danger-light: #fef2f2;
+      --info: #0284c7;
+      --info-light: #f0f9ff;
+      --purple: #7c3aed;
+      --purple-light: #f5f3ff;
+      
+      --gray-50: #f8fafc;
+      --gray-100: #f1f5f9;
+      --gray-200: #e2e8f0;
+      --gray-300: #cbd5e1;
+      --gray-400: #94a3b8;
+      --gray-500: #64748b;
+      --gray-600: #475569;
+      --gray-700: #334155;
+      --gray-800: #1e293b;
+      --gray-900: #0f172a;
+      
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --border-dark: #cbd5e1;
+      --radius: 8px;
+      --radius-lg: 12px;
+      --radius-sm: 6px;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --transition: 0.15s ease-in-out;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font);
+      background-color: var(--gray-50);
+      color: var(--gray-800);
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Accessibility utility */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
+
+    /* Common Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-weight: 500;
+      font-size: 0.875rem;
+      padding: 0.5rem 1rem;
+      border-radius: var(--radius);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all var(--transition);
+      text-decoration: none;
+      line-height: 1.25rem;
+      white-space: nowrap;
+    }
+
+    .btn:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+
+    .btn-primary {
+      background-color: var(--primary);
+      color: #ffffff;
+    }
+    .btn-primary:hover {
+      background-color: var(--primary-hover);
+    }
+
+    .btn-secondary {
+      background-color: var(--surface);
+      border-color: var(--border);
+      color: var(--gray-700);
+    }
+    .btn-secondary:hover {
+      background-color: var(--gray-100);
+      border-color: var(--gray-300);
+    }
+
+    .btn-success {
+      background-color: var(--success);
+      color: #ffffff;
+    }
+    .btn-success:hover {
+      background-color: #15803d;
+    }
+
+    .btn-danger {
+      background-color: var(--danger);
+      color: #ffffff;
+    }
+    .btn-danger:hover {
+      background-color: #b91c1c;
+    }
+
+    .btn-sm {
+      padding: 0.35rem 0.65rem;
+      font-size: 0.775rem;
+      border-radius: var(--radius-sm);
+    }
+
+    .btn-icon {
+      padding: 0.4rem;
+      border-radius: var(--radius-sm);
+      color: var(--gray-500);
+      background: transparent;
+      border: 1px solid transparent;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--transition);
+    }
+    .btn-icon:hover {
+      background-color: var(--gray-100);
+      color: var(--gray-900);
+    }
+    .btn-icon.delete:hover {
+      background-color: var(--danger-light);
+      color: var(--danger);
+    }
+
+    /* Inputs and Forms */
+    .form-group {
+      margin-bottom: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      position: relative;
+    }
+
+    .form-group label {
+      font-size: 0.825rem;
+      font-weight: 600;
+      color: var(--gray-700);
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 0.55rem 0.75rem;
+      font-size: 0.875rem;
+      line-height: 1.25rem;
+      color: var(--gray-900);
+      background-color: var(--surface);
+      border: 1px solid var(--border-dark);
+      border-radius: var(--radius);
+      transition: border-color var(--transition), box-shadow var(--transition);
+      font-family: inherit;
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-focus);
+    }
+
+    .form-control.error {
+      border-color: var(--danger);
+    }
+
+    .input-feedback {
+      font-size: 0.75rem;
+      color: var(--danger);
+      display: none;
+    }
+    .input-feedback.visible {
+      display: block;
+    }
+
+    .password-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .password-wrap .form-control {
+      padding-right: 2.5rem;
+    }
+    .password-toggle {
+      position: absolute;
+      right: 0.6rem;
+      background: none;
+      border: none;
+      color: var(--gray-400);
+      cursor: pointer;
+      padding: 0.2rem;
+      display: flex;
+      align-items: center;
+    }
+    .password-toggle:hover {
+      color: var(--gray-700);
+    }
+
+    /* Badge Tags */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 0.2rem 0.55rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      white-space: nowrap;
+      text-transform: capitalize;
+    }
+    .badge::before {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    .badge-open { background: var(--info-light); color: var(--info); }
+    .badge-open::before { background: var(--info); }
+
+    .badge-in-progress { background: var(--warning-light); color: var(--warning); }
+    .badge-in-progress::before { background: var(--warning); }
+
+    .badge-in-review { background: var(--purple-light); color: var(--purple); }
+    .badge-in-review::before { background: var(--purple); }
+
+    .badge-testing { background: #e0f2fe; color: #0369a1; }
+    .badge-testing::before { background: #0284c7; }
+
+    .badge-deployed { background: var(--success-light); color: var(--success); }
+    .badge-deployed::before { background: var(--success); }
+
+    .badge-closed { background: var(--gray-100); color: var(--gray-600); }
+    .badge-closed::before { background: var(--gray-400); }
+
+    .badge-blocked { background: var(--danger-light); color: var(--danger); }
+    .badge-blocked::before { background: var(--danger); }
+
+    /* SFDC Badges */
+    .badge-sfdc-open { background: #fef08a; color: #854d0e; }
+    .badge-sfdc-pending { background: #e0e7ff; color: #3730a3; }
+    .badge-sfdc-closed { background: #dcfce7; color: #166534; }
+
+    /* Overdue tag */
+    .badge-overdue {
+      background-color: var(--danger-light);
+      color: var(--danger);
+      font-weight: 700;
+      padding: 0.15rem 0.4rem;
+      font-size: 0.7rem;
+      border-radius: 4px;
+      border: 1px solid #fecaca;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    /* ═══════════════════════════════════════
+       LOGIN VIEW
+    ═══════════════════════════════════════ */
+    #view-login {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      background: radial-gradient(circle at 10% 20%, #1e3a8a 0%, #0f172a 90%);
+    }
+
+    .login-box {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+      width: 100%;
+      max-width: 420px;
+      padding: 2.25rem;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .login-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .brand-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--primary) 0%, #3b82f6 100%);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      margin-bottom: 1rem;
+      box-shadow: 0 8px 16px -4px rgba(37, 99, 235, 0.4);
+    }
+    .login-header h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--gray-900);
+    }
+    .login-header p {
+      color: var(--gray-500);
+      font-size: 0.85rem;
+      margin-top: 0.25rem;
+    }
+
+    .login-alert {
+      padding: 0.65rem 0.85rem;
+      border-radius: var(--radius-sm);
+      background-color: var(--danger-light);
+      border: 1px solid #fca5a5;
+      color: var(--danger);
+      font-size: 0.825rem;
+      margin-bottom: 1.25rem;
+      display: none;
+    }
+
+    .demo-credentials {
+      margin-top: 1.75rem;
+      padding: 0.75rem 1rem;
+      background: var(--gray-50);
+      border-radius: var(--radius-sm);
+      border: 1px dashed var(--gray-300);
+      font-size: 0.775rem;
+      color: var(--gray-600);
+    }
+    .demo-credentials code {
+      background: var(--gray-200);
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--gray-800);
+    }
+
+    /* ═══════════════════════════════════════
+       APP SHELL & HEADER
+    ═══════════════════════════════════════ */
+    #view-app {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    .app-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .header-content {
+      max-width: 1700px;
+      margin: 0 auto;
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--primary) 0%, #3b82f6 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+    }
+    .brand-title {
+      font-size: 1.125rem;
+      font-weight: 700;
+      color: var(--gray-900);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand-badge {
+      font-size: 0.7rem;
+      background: var(--primary-light);
+      color: var(--primary);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .nav-tabs {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .nav-tab {
+      padding: 0.45rem 0.9rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--gray-600);
+      border-radius: var(--radius);
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all var(--transition);
+    }
+    .nav-tab:hover {
+      background: var(--gray-100);
+      color: var(--gray-900);
+    }
+    .nav-tab.active {
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+
+    .user-profile {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+    .user-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--gray-200);
+      color: var(--gray-700);
+      font-weight: 700;
+      font-size: 0.875rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-transform: uppercase;
+      border: 2px solid var(--border);
+    }
+    .user-details {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.2;
+    }
+    .user-name {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--gray-800);
+    }
+    .user-role {
+      font-size: 0.725rem;
+      color: var(--gray-500);
+      text-transform: capitalize;
+    }
+
+    /* ═══════════════════════════════════════
+       MAIN CONTENT CONTAINER
+    ═══════════════════════════════════════ */
+    .app-main {
+      flex: 1;
+      max-width: 1700px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    /* Stat Cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+    }
+    .stat-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 1.1rem 1.25rem;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .stat-icon-wrap {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .stat-info {
+      display: flex;
+      flex-direction: column;
+    }
+    .stat-value {
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: var(--gray-900);
+      line-height: 1.2;
+    }
+    .stat-label {
+      font-size: 0.775rem;
+      color: var(--gray-500);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.025em;
+    }
+
+    /* Toolbar / Action Controls */
+    .toolbar-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.85rem;
+    }
+
+    .filter-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.65rem;
+      flex: 1;
+    }
+
+    .search-input-wrap {
+      position: relative;
+      min-width: 260px;
+      flex: 1;
+      max-width: 380px;
+    }
+    .search-input-wrap svg {
+      position: absolute;
+      left: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--gray-400);
+      pointer-events: none;
+    }
+    .search-input-wrap input {
+      padding-left: 2.25rem;
+    }
+
+    .filter-select {
+      min-width: 150px;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.85rem;
+      border-radius: var(--radius);
+      border: 1px solid var(--border-dark);
+      background-color: var(--surface);
+      color: var(--gray-700);
+      outline: none;
+      cursor: pointer;
+    }
+    .filter-select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-focus);
+    }
+
+    .action-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* ═══════════════════════════════════════
+       DATA TABLE
+    ═══════════════════════════════════════ */
+    .table-container {
+      background: var(--surface);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .table-scroll-wrapper {
+      overflow-x: auto;
+      max-height: calc(100vh - 350px);
+      min-height: 320px;
+      position: relative;
+    }
+
+    table.data-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 0.84rem;
+      text-align: left;
+    }
+
+    table.data-table thead {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: var(--gray-50);
+    }
+
+    table.data-table th {
+      padding: 0.75rem 0.85rem;
+      font-weight: 600;
+      color: var(--gray-700);
+      border-bottom: 2px solid var(--border);
+      white-space: nowrap;
+      user-select: none;
+      cursor: pointer;
+      transition: background var(--transition);
+      background: var(--gray-50);
+    }
+
+    table.data-table th:hover {
+      background: var(--gray-100);
+      color: var(--gray-900);
+    }
+
+    table.data-table th.no-sort {
+      cursor: default;
+    }
+    table.data-table th.no-sort:hover {
+      background: var(--gray-50);
+      color: var(--gray-700);
+    }
+
+    .th-content {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .sort-indicator {
+      font-size: 0.75rem;
+      color: var(--gray-400);
+    }
+    th.sorted .sort-indicator {
+      color: var(--primary);
+      font-weight: bold;
+    }
+
+    table.data-table td {
+      padding: 0.7rem 0.85rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--gray-800);
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+
+    table.data-table tbody tr {
+      transition: background-color var(--transition);
+      cursor: pointer;
+    }
+
+    table.data-table tbody tr:hover {
+      background-color: #f1f5f9;
+    }
+
+    /* Row Overdue Highlight */
+    table.data-table tbody tr.row-overdue {
+      background-color: #fffbeb;
+    }
+    table.data-table tbody tr.row-overdue:hover {
+      background-color: #fef3c7;
+    }
+
+    /* Fixed first column (Tracker No.) */
+    table.data-table th.sticky-col,
+    table.data-table td.sticky-col {
+      position: sticky;
+      left: 0;
+      z-index: 10;
+      background: inherit;
+      border-right: 1px solid var(--border);
+    }
+    table.data-table th.sticky-col {
+      z-index: 25;
+      background: var(--gray-50);
+    }
+    table.data-table tbody tr:hover td.sticky-col {
+      background: #f1f5f9;
+    }
+    table.data-table tbody tr.row-overdue td.sticky-col {
+      background: #fffbeb;
+    }
+    table.data-table tbody tr.row-overdue:hover td.sticky-col {
+      background: #fef3c7;
+    }
+
+    /* Cell Content styling */
+    .tracker-no-cell {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-weight: 700;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .pr-link {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .pr-link:hover {
+      text-decoration: underline;
+    }
+
+    /* Empty state */
+    .empty-state {
+      padding: 4rem 1.5rem;
+      text-align: center;
+      color: var(--gray-500);
+      display: none;
+    }
+    .empty-state svg {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 1rem;
+      color: var(--gray-400);
+    }
+    .empty-state h3 {
+      font-size: 1.1rem;
+      color: var(--gray-800);
+      margin-bottom: 0.25rem;
+    }
+
+    /* Table Footer / Pagination */
+    .table-footer {
+      padding: 0.75rem 1.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      font-size: 0.85rem;
+      color: var(--gray-600);
+    }
+
+    .pagination-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .page-info {
+      font-weight: 500;
+    }
+
+    /* ═══════════════════════════════════════
+       USER MANAGEMENT TAB
+    ═══════════════════════════════════════ */
+    .users-container {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .user-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 1rem;
+    }
+
+    .user-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      padding: 1.25rem;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .user-card-main {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      min-width: 0;
+    }
+
+    .user-card-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--primary-light);
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+
+    .user-card-meta {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .user-card-name {
+      font-weight: 600;
+      color: var(--gray-900);
+      font-size: 0.925rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .user-card-email {
+      font-size: 0.8rem;
+      color: var(--gray-500);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .user-role-badge {
+      margin-top: 0.35rem;
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.725rem;
+      font-weight: 600;
+      text-transform: capitalize;
+      width: fit-content;
+    }
+    .user-role-admin { background: #fee2e2; color: #991b1b; }
+    .user-role-developer { background: #dbeafe; color: #1e40af; }
+    .user-role-viewer { background: #f1f5f9; color: #475569; }
+
+    /* ═══════════════════════════════════════
+       MODAL DIALOGS
+    ═══════════════════════════════════════ */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(2px);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      overflow-y: auto;
+    }
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-dialog {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      width: 100%;
+      max-width: 680px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      animation: modalSlide 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .modal-dialog.modal-sm {
+      max-width: 440px;
+    }
+
+    @keyframes modalSlide {
+      from { transform: translateY(12px) scale(0.98); opacity: 0; }
+      to { transform: translateY(0) scale(1); opacity: 1; }
+    }
+
+    .modal-header {
+      padding: 1.15rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .modal-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--gray-900);
+    }
+
+    .modal-body {
+      padding: 1.5rem;
+      max-height: 75vh;
+      overflow-y: auto;
+    }
+
+    .modal-footer {
+      padding: 1rem 1.5rem;
+      background: var(--gray-50);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.65rem;
+    }
+
+    /* Modal Form Grid */
+    .form-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    .span-full {
+      grid-column: 1 / -1;
+    }
+
+    /* Details Grid inside View Modal */
+    .details-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem 1.5rem;
+    }
+    .detail-item {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .detail-item.span-full {
+      grid-column: 1 / -1;
+    }
+    .detail-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--gray-500);
+    }
+    .detail-value {
+      font-size: 0.925rem;
+      color: var(--gray-900);
+      font-weight: 500;
+    }
+
+    /* ═══════════════════════════════════════
+       TOAST NOTIFICATIONS
+    ═══════════════════════════════════════ */
+    .toast-container {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      pointer-events: none;
+    }
+    .toast {
+      pointer-events: auto;
+      background: var(--gray-900);
+      color: #fff;
+      padding: 0.75rem 1.15rem;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-lg);
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      animation: toastIn 0.25s ease;
+      min-width: 260px;
+    }
+    .toast.success { background: #15803d; }
+    .toast.error { background: #b91c1c; }
+    @keyframes toastIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* ═══════════════════════════════════════
+       PRINT STYLES
+    ═══════════════════════════════════════ */
+    @media print {
+      body { background: #fff; font-size: 10pt; }
+      .app-header, .stats-grid, .toolbar-card, .table-footer, .action-cell, .nav-tabs, .btn { display: none !important; }
+      .table-scroll-wrapper { max-height: none !important; overflow: visible !important; }
+      .table-container { border: none !important; box-shadow: none !important; }
+      table.data-table th, table.data-table td { border: 1px solid #ddd !important; }
+      #view-login { display: none !important; }
+      #view-app { display: flex !important; }
+    }
+
+    /* ═══════════════════════════════════════
+       RESPONSIVE DESIGN
+    ═══════════════════════════════════════ */
+    @media (max-width: 768px) {
+      .header-content { flex-direction: column; align-items: stretch; gap: 0.75rem; }
+      .form-grid-2, .details-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .toolbar-card { flex-direction: column; align-items: stretch; }
+      .search-input-wrap { max-width: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════
+       1. LOGIN PAGE
+  ═══════════════════════════════════════ -->
+  <section id="view-login" aria-label="Sign In View">
+    <div class="login-box">
+      <div class="login-header">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="16 18 22 12 16 6"></polyline>
+            <polyline points="8 6 2 12 8 18"></polyline>
+          </svg>
+        </div>
+        <h1>Development Tracker</h1>
+        <p>Enterprise Request &amp; Release Portal</p>
+      </div>
+
+      <div id="login-alert" class="login-alert" role="alert"></div>
+
+      <form id="form-login" novalidate>
+        <div class="form-group">
+          <label for="input-email">Email Address</label>
+          <input 
+            type="email" 
+            id="input-email" 
+            class="form-control" 
+            placeholder="admin@company.com" 
+            required 
+            autocomplete="username"
+            autofocus
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="input-password">Password</label>
+          <div class="password-wrap">
+            <input 
+              type="password" 
+              id="input-password" 
+              class="form-control" 
+              placeholder="••••••••" 
+              required 
+              autocomplete="current-password"
+            />
+            <button type="button" class="password-toggle" onclick="togglePasswordVisibility('input-password', this)" aria-label="Toggle password visibility">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem; padding: 0.65rem;">
+          Sign In
+        </button>
+      </form>
+
+      <div class="demo-credentials">
+        <strong>Default Admin:</strong> <code>admin@company.com</code><br/>
+        <strong>Password:</strong> <code>admin123</code>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════
+       2. MAIN APP SHELL
+  ═══════════════════════════════════════ -->
+  <section id="view-app" aria-label="Main Application">
+    <header class="app-header">
+      <div class="header-content">
+        <div class="brand-section">
+          <div class="brand-logo">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="16 18 22 12 16 6"></polyline>
+              <polyline points="8 6 2 12 8 18"></polyline>
+            </svg>
+          </div>
+          <div class="brand-title">
+            DevTracker
+            <span class="brand-badge">PROD</span>
+          </div>
+
+          <nav class="nav-tabs" aria-label="Application sections">
+            <button class="nav-tab active" id="tab-btn-tracker" onclick="switchView('tracker')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+              Tracker
+            </button>
+            <button class="nav-tab" id="tab-btn-users" onclick="switchView('users')" style="display: none;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              User Management
+            </button>
+          </nav>
+        </div>
+
+        <div class="user-profile">
+          <div class="user-avatar" id="current-user-avatar">AD</div>
+          <div class="user-details">
+            <span class="user-name" id="current-user-name">Admin User</span>
+            <span class="user-role" id="current-user-role">Administrator</span>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="logout()" title="Sign Out">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Logout
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <!-- ── TRACKER SECTION ── -->
+      <div id="section-tracker" style="display: flex; flex-direction: column; gap: 1.25rem;">
+        
+        <!-- Summary Stats Grid -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon-wrap" style="background: var(--primary-light); color: var(--primary);">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
+            <div class="stat-info">
+              <span class="stat-value" id="stat-total">0</span>
+              <span class="stat-label">Total Requests</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon-wrap" style="background: var(--warning-light); color: var(--warning);">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+            </div>
+            <div class="stat-info">
+              <span class="stat-value" id="stat-active">0</span>
+              <span class="stat-label">In Progress</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon-wrap" style="background: var(--success-light); color: var(--success);">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+            <div class="stat-info">
+              <span class="stat-value" id="stat-deployed">0</span>
+              <span class="stat-label">Deployed Prod</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon-wrap" style="background: var(--danger-light); color: var(--danger);">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+            </div>
+            <div class="stat-info">
+              <span class="stat-value" id="stat-blocked">0</span>
+              <span class="stat-label">Blocked</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon-wrap" style="background: #fef2f2; color: #dc2626;">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </div>
+            <div class="stat-info">
+              <span class="stat-value" id="stat-overdue">0</span>
+              <span class="stat-label">Overdue</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div class="toolbar-card">
+          <div class="filter-group">
+            <div class="search-input-wrap">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input 
+                type="text" 
+                id="search-box" 
+                class="form-control" 
+                placeholder="Search tracker (Press '/' to focus)..." 
+                oninput="onSearchChange()"
+              />
+            </div>
+
+            <select id="filter-dept" class="filter-select" onchange="renderTable()">
+              <option value="">All Departments</option>
+            </select>
+
+            <select id="filter-status" class="filter-select" onchange="renderTable()">
+              <option value="">All Statuses</option>
+              <option value="Open">Open</option>
+              <option value="In Progress">In Progress</option>
+              <option value="In Review">In Review</option>
+              <option value="Testing">Testing</option>
+              <option value="Deployed">Deployed</option>
+              <option value="Closed">Closed</option>
+              <option value="Blocked">Blocked</option>
+            </select>
+
+            <select id="filter-type" class="filter-select" onchange="renderTable()">
+              <option value="">All Request Types</option>
+              <option value="Bug Fix">Bug Fix</option>
+              <option value="Enhancement">Enhancement</option>
+              <option value="New Feature">New Feature</option>
+              <option value="Change Request">Change Request</option>
+              <option value="Maintenance">Maintenance</option>
+              <option value="Integration">Integration</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="action-group">
+            <button class="btn btn-secondary btn-sm" onclick="exportFilteredCSV()" title="Export filtered records to CSV">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export CSV
+            </button>
+            <button class="btn btn-primary btn-sm" id="btn-add-record" onclick="openRecordModal()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              New Record
+            </button>
+          </div>
+        </div>
+
+        <!-- Main Tracker Table -->
+        <div class="table-container">
+          <div class="table-scroll-wrapper">
+            <table class="data-table" id="tracker-table">
+              <thead>
+                <tr>
+                  <th class="sticky-col" onclick="sortTable('trackerNo')" data-col="trackerNo">
+                    <div class="th-content">Tracker No. <span class="sort-indicator">▲</span></div>
+                  </th>
+                  <th onclick="sortTable('department')" data-col="department">
+                    <div class="th-content">Department <span class="sort-indicator">▲</span></div>
+                  </th>
+                  <th onclick="sortTable('subject')" data-col="subject">
+                    <div class="th-content">Subject <span class="sort-indicator">▲</span></div>
+                  </th>
+                  <th onclick="sortTable('requestType')" data-col="requestType">
+                    <div class="th-content">Type of Request <span class="sort-indicator">▲</span></div>
+                  </th>
+                  <th onclick="sortTable('developer')" data-col="developer">
+                    <div class="th-content">Developer <span class="sort-indicator">▲</span></div>
+                  </th>
+                  <th onclick="sortTable('status')" data-col="status">
+                    <div class="th-content">Status <span class="sort-indicator">▲</span></div>
+                  </th>
+                  <th onclick="sortTable('expectedProdDate')" data-col="expectedProdDate">
+                    <div class="th-content">Expected Prod Deployment Date <span class="sort-indicator">▲</span></div>
+                  </th>
+                  <th onclick="sortTable('prodDeployDate')" data-col="prodDeployDate">
+                    <div class="th-content">Prod Deployment Date <span class="sort-indicator">▲</span></div>
+                  </th>
+                  <th onclick="sortTable('businessApprovalDate')" data-col="businessApprovalDate">
+                    <div class="th-content">Business Approval Date <span class="sort-indicator">▲</span></div>
+                  </th>
+                  <th onclick="sortTable('releasePR')" data-col="releasePR">
+                    <div class="th-content">Release Pull Request <span class="sort-indicator">▲</span></div>
+                  </th>
+                  <th onclick="sortTable('createdDate')" data-col="createdDate">
+                    <div class="th-content">Created Date <span class="sort-indicator">▲</span></div>
+                  </th>
+                  <th onclick="sortTable('owner')" data-col="owner">
+                    <div class="th-content">Owner <span class="sort-indicator">▲</span></div>
+                  </th>
+                  <th onclick="sortTable('sfdcStatus')" data-col="sfdcStatus">
+                    <div class="th-content">SFDC Status <span class="sort-indicator">▲</span></div>
+                  </th>
+                  <th class="no-sort action-cell" style="text-align: right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="tracker-tbody"></tbody>
+            </table>
+
+            <div id="table-empty" class="empty-state">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="8" y1="12" x2="16" y2="12"/>
+              </svg>
+              <h3>No matching records found</h3>
+              <p>Try modifying your search or filters to see more results.</p>
+            </div>
+          </div>
+
+          <!-- Table Footer Pagination -->
+          <div class="table-footer">
+            <div class="page-size-wrap">
+              Show 
+              <select id="page-size" class="filter-select" style="min-width: 70px; padding: 2px 6px;" onchange="changePageSize()">
+                <option value="10">10</option>
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+              records per page
+            </div>
+
+            <div class="pagination-controls">
+              <span class="page-info" id="pagination-info">Page 1 of 1 (0 items)</span>
+              <button class="btn btn-secondary btn-sm" id="btn-prev-page" onclick="prevPage()">Previous</button>
+              <button class="btn btn-secondary btn-sm" id="btn-next-page" onclick="nextPage()">Next</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── USERS SECTION ── -->
+      <div id="section-users" class="users-container" style="display: none;">
+        <div class="toolbar-card">
+          <div>
+            <h2 style="font-size: 1.15rem; font-weight: 700; color: var(--gray-900);">System Users</h2>
+            <p style="font-size: 0.8rem; color: var(--gray-500);">Manage accounts, credentials, and access roles.</p>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="openUserModal()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add New User
+          </button>
+        </div>
+
+        <div class="user-cards-grid" id="users-grid"></div>
+      </div>
+    </main>
+  </section>
+
+  <!-- ═══════════════════════════════════════
+       MODALS
+  ═══════════════════════════════════════ -->
+
+  <!-- Add / Edit Record Modal -->
+  <div class="modal-backdrop" id="modal-record">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-record-title">New Development Record</h3>
+        <button class="btn-icon" onclick="closeModal('modal-record')" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <form id="form-record" onsubmit="saveRecord(event)">
+        <div class="modal-body">
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="rec-trackerno">Tracker No. *</label>
+              <input type="text" id="rec-trackerno" class="form-control" required placeholder="e.g. TRK-2026-001" />
+              <div class="input-feedback" id="fb-trackerno">Tracker No is required</div>
+            </div>
+
+            <div class="form-group">
+              <label for="rec-dept">Department *</label>
+              <input type="text" id="rec-dept" class="form-control" list="dept-datalist" required placeholder="e.g. Billing, Sales, IT" />
+              <datalist id="dept-datalist"></datalist>
+              <div class="input-feedback" id="fb-dept">Department is required</div>
+            </div>
+
+            <div class="form-group span-full">
+              <label for="rec-subject">Subject *</label>
+              <input type="text" id="rec-subject" class="form-control" required placeholder="Brief description of the development item" />
+              <div class="input-feedback" id="fb-subject">Subject is required</div>
+            </div>
+
+            <div class="form-group">
+              <label for="rec-type">Type of Request *</label>
+              <select id="rec-type" class="form-control" required>
+                <option value="">Select type...</option>
+                <option value="Bug Fix">Bug Fix</option>
+                <option value="Enhancement">Enhancement</option>
+                <option value="New Feature">New Feature</option>
+                <option value="Change Request">Change Request</option>
+                <option value="Maintenance">Maintenance</option>
+                <option value="Integration">Integration</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="rec-developer">Developer *</label>
+              <input type="text" id="rec-developer" class="form-control" required placeholder="Assigned engineer" />
+            </div>
+
+            <div class="form-group">
+              <label for="rec-status">Status *</label>
+              <select id="rec-status" class="form-control" required>
+                <option value="Open">Open</option>
+                <option value="In Progress">In Progress</option>
+                <option value="In Review">In Review</option>
+                <option value="Testing">Testing</option>
+                <option value="Deployed">Deployed</option>
+                <option value="Closed">Closed</option>
+                <option value="Blocked">Blocked</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="rec-owner">Owner</label>
+              <input type="text" id="rec-owner" class="form-control" placeholder="Business owner" />
+            </div>
+
+            <div class="form-group">
+              <label for="rec-expected-date">Expected Prod Deployment Date</label>
+              <input type="date" id="rec-expected-date" class="form-control" />
+            </div>
+
+            <div class="form-group">
+              <label for="rec-prod-date">Prod Deployment Date</label>
+              <input type="date" id="rec-prod-date" class="form-control" />
+            </div>
+
+            <div class="form-group">
+              <label for="rec-approval-date">Business Approval Date</label>
+              <input type="date" id="rec-approval-date" class="form-control" />
+            </div>
+
+            <div class="form-group">
+              <label for="rec-pr">Release Pull Request</label>
+              <input type="text" id="rec-pr" class="form-control" placeholder="PR number or URL" />
+            </div>
+
+            <div class="form-group span-full">
+              <label for="rec-sfdc">SFDC Status</label>
+              <select id="rec-sfdc" class="form-control">
+                <option value="">-- None --</option>
+                <option value="Open">Open</option>
+                <option value="Pending">Pending</option>
+                <option value="Closed">Closed</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-record')">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-record">Save Record</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- View Record Details Modal -->
+  <div class="modal-backdrop" id="modal-view-record">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title" id="view-modal-title">Record Details</h3>
+        <button class="btn-icon" onclick="closeModal('modal-view-record')" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="details-grid" id="view-record-details"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modal-view-record')">Close</button>
+        <button type="button" class="btn btn-primary" id="btn-quick-edit" onclick="triggerQuickEdit()">Edit Record</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add / Edit User Modal -->
+  <div class="modal-backdrop" id="modal-user">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-user-title">Add New User</h3>
+        <button class="btn-icon" onclick="closeModal('modal-user')" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <form id="form-user" onsubmit="saveUser(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="user-name">Full Name *</label>
+            <input type="text" id="user-name" class="form-control" required placeholder="John Doe" />
+          </div>
+
+          <div class="form-group">
+            <label for="user-email">Email Address *</label>
+            <input type="email" id="user-email" class="form-control" required placeholder="user@company.com" />
+          </div>
+
+          <div class="form-group">
+            <label for="user-role">Role *</label>
+            <select id="user-role" class="form-control" required>
+              <option value="developer">Developer</option>
+              <option value="admin">Administrator</option>
+              <option value="viewer">Viewer (Read-Only)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="user-password" id="user-password-label">Password *</label>
+            <div class="password-wrap">
+              <input type="password" id="user-password" class="form-control" placeholder="••••••••" />
+              <button type="button" class="password-toggle" onclick="togglePasswordVisibility('user-password', this)" aria-label="Toggle password visibility">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+            <span style="font-size: 0.725rem; color: var(--gray-500);" id="user-password-hint">Min. 6 characters.</span>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-user')">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-user">Create User</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Confirmation Dialog -->
+  <div class="modal-backdrop" id="modal-confirm">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-header">
+        <h3 class="modal-title" id="confirm-title">Confirm Action</h3>
+        <button class="btn-icon" onclick="closeModal('modal-confirm')" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p id="confirm-msg" style="color: var(--gray-600); font-size: 0.9rem;">Are you sure you want to proceed?</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modal-confirm')">Cancel</button>
+        <button type="button" class="btn btn-danger" id="btn-confirm-action">Confirm Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+  <!-- ═══════════════════════════════════════
+       JAVASCRIPT APPLICATION CORE
+  ═══════════════════════════════════════ -->
+  <script>
+    'use strict';
+
+    /* ── Local Storage Keys ── */
+    const STORAGE_KEY_USERS = 'dt_users_v2';
+    const STORAGE_KEY_RECORDS = 'dt_records_v2';
+    const STORAGE_KEY_SESSION = 'dt_session_v2';
+
+    /* ── Application State ── */
+    let currentUser = null;
+    let records = [];
+    let users = [];
+    let activeTab = 'tracker';
+
+    let currentEditingRecordId = null;
+    let currentEditingUserId = null;
+    let currentViewingRecordId = null;
+    let pendingConfirmAction = null;
+
+    let searchDebounceTimer = null;
+    let sortColumn = 'trackerNo';
+    let sortDirection = 'asc';
+    let currentPage = 1;
+    let pageSize = 25;
+
+    /* ── Helper: SHA-256 Hashing ── */
+    async function hashPassword(plainText) {
+      if (!plainText) return '';
+      const encoder = new TextEncoder();
+      const data = encoder.encode(plainText);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    /* ── Helper: Escape HTML ── */
+    function escapeHTML(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    /* ── Helper: Format Dates cleanly ── */
+    function formatDate(dateStr) {
+      if (!dateStr) return '<span style="color:var(--gray-400)">—</span>';
+      try {
+        const parts = dateStr.split('-');
+        if (parts.length === 3) {
+          const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+          return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+        return dateStr;
+      } catch (e) {
+        return dateStr;
+      }
+    }
+
+    function isOverdue(expectedDate, status) {
+      if (!expectedDate) return false;
+      if (status === 'Deployed' || status === 'Closed') return false;
+      const today = new Date().toISOString().split('T')[0];
+      return expectedDate < today;
+    }
+
+    /* ── Seed Initial Data ── */
+    async function initializeDatabase() {
+      // Seed default admin user if absent
+      const storedUsers = localStorage.getItem(STORAGE_KEY_USERS);
+      if (!storedUsers) {
+        const defaultAdminHash = await hashPassword('admin123');
+        const initialUsers = [
+          {
+            id: 'usr-admin-1',
+            name: 'Administrator',
+            email: 'admin@company.com',
+            passwordHash: defaultAdminHash,
+            role: 'admin'
+          },
+          {
+            id: 'usr-dev-1',
+            name: 'Sarah Connor',
+            email: 'sarah@company.com',
+            passwordHash: await hashPassword('dev123'),
+            role: 'developer'
+          }
+        ];
+        localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(initialUsers));
+      }
+
+      // Seed sample records if absent
+      const storedRecords = localStorage.getItem(STORAGE_KEY_RECORDS);
+      if (!storedRecords) {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        const todayStr = `${yyyy}-${mm}-${dd}`;
+        
+        // Overdue date
+        const pastDate = new Date(Date.now() - 5 * 86400000).toISOString().split('T')[0];
+        // Future date
+        const futureDate = new Date(Date.now() + 12 * 86400000).toISOString().split('T')[0];
+
+        const initialRecords = [
+          {
+            id: 'rec-1',
+            trackerNo: 'TRK-2026-001',
+            department: 'Billing',
+            subject: 'Automated Invoice reconciliation webhook integration',
+            requestType: 'Enhancement',
+            developer: 'Sarah Connor',
+            status: 'In Progress',
+            expectedProdDate: pastDate, // Overdue item
+            prodDeployDate: '',
+            businessApprovalDate: todayStr,
+            releasePR: 'https://github.com/company/repo/pull/402',
+            createdDate: todayStr,
+            owner: 'David Miller',
+            sfdcStatus: 'Open'
+          },
+          {
+            id: 'rec-2',
+            trackerNo: 'TRK-2026-002',
+            department: 'Customer Success',
+            subject: 'SSO Okta SAML certificate rotation update',
+            requestType: 'Maintenance',
+            developer: 'Alex Rivera',
+            status: 'Testing',
+            expectedProdDate: futureDate,
+            prodDeployDate: '',
+            businessApprovalDate: todayStr,
+            releasePR: 'PR #415',
+            createdDate: todayStr,
+            owner: 'Rachel Green',
+            sfdcStatus: 'Pending'
+          },
+          {
+            id: 'rec-3',
+            trackerNo: 'TRK-2026-003',
+            department: 'Security',
+            subject: 'Role-based API rate limiting and token revocation',
+            requestType: 'New Feature',
+            developer: 'Sarah Connor',
+            status: 'Deployed',
+            expectedProdDate: pastDate,
+            prodDeployDate: todayStr,
+            businessApprovalDate: todayStr,
+            releasePR: 'https://github.com/company/repo/pull/390',
+            createdDate: pastDate,
+            owner: 'Security Lead',
+            sfdcStatus: 'Closed'
+          },
+          {
+            id: 'rec-4',
+            trackerNo: 'TRK-2026-004',
+            department: 'Logistics',
+            subject: 'Fix dispatch shipment barcode label distortion bug',
+            requestType: 'Bug Fix',
+            developer: 'Mark Jensen',
+            status: 'Blocked',
+            expectedProdDate: '',
+            prodDeployDate: '',
+            businessApprovalDate: '',
+            releasePR: '',
+            createdDate: todayStr,
+            owner: 'Operations Team',
+            sfdcStatus: 'Open'
+          }
+        ];
+        localStorage.setItem(STORAGE_KEY_RECORDS, JSON.stringify(initialRecords));
+      }
+
+      loadFromStorage();
+    }
+
+    function loadFromStorage() {
+      try {
+        users = JSON.parse(localStorage.getItem(STORAGE_KEY_USERS) || '[]');
+        records = JSON.parse(localStorage.getItem(STORAGE_KEY_RECORDS) || '[]');
+      } catch (e) {
+        console.error('Failed to parse storage:', e);
+        users = [];
+        records = [];
+      }
+    }
+
+    function saveRecordsToStorage() {
+      localStorage.setItem(STORAGE_KEY_RECORDS, JSON.stringify(records));
+    }
+
+    function saveUsersToStorage() {
+      localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
+    }
+
+    /* ── Authentication & Session ── */
+    async function checkAuthSession() {
+      const session = localStorage.getItem(STORAGE_KEY_SESSION);
+      if (session) {
+        try {
+          const parsed = JSON.parse(session);
+          const found = users.find(u => u.id === parsed.userId);
+          if (found) {
+            currentUser = found;
+            showAppView();
+            return;
+          }
+        } catch (e) {}
+      }
+      showLoginView();
+    }
+
+    function showLoginView() {
+      document.getElementById('view-login').style.display = 'flex';
+      document.getElementById('view-app').style.display = 'none';
+      document.getElementById('input-email').value = '';
+      document.getElementById('input-password').value = '';
+      document.getElementById('login-alert').style.display = 'none';
+    }
+
+    function showAppView() {
+      document.getElementById('view-login').style.display = 'none';
+      document.getElementById('view-app').style.display = 'flex';
+
+      // Update User Navigation Header
+      const initials = currentUser.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+      document.getElementById('current-user-avatar').textContent = initials;
+      document.getElementById('current-user-name').textContent = currentUser.name;
+      document.getElementById('current-user-role').textContent = currentUser.role;
+
+      // Admin tabs visibility
+      const isAdmin = currentUser.role === 'admin';
+      document.getElementById('tab-btn-users').style.display = isAdmin ? 'inline-flex' : 'none';
+
+      // Control access for new record creation
+      const canEdit = currentUser.role === 'admin' || currentUser.role === 'developer';
+      document.getElementById('btn-add-record').style.display = canEdit ? 'inline-flex' : 'none';
+
+      populateDepartmentFilter();
+      updateStats();
+      renderTable();
+      if (isAdmin) renderUsersList();
+    }
+
+    document.getElementById('form-login').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const email = document.getElementById('input-email').value.trim().toLowerCase();
+      const pass = document.getElementById('input-password').value;
+      const alertEl = document.getElementById('login-alert');
+
+      if (!email || !pass) {
+        alertEl.textContent = 'Please enter both email and password.';
+        alertEl.style.display = 'block';
+        return;
+      }
+
+      const hash = await hashPassword(pass);
+      const user = users.find(u => u.email.toLowerCase() === email && (u.passwordHash === hash || u.password === pass));
+
+      if (user) {
+        // Upgrade legacy plaintext password if present
+        if (!user.passwordHash && user.password) {
+          user.passwordHash = hash;
+          delete user.password;
+          saveUsersToStorage();
+        }
+
+        currentUser = user;
+        localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify({ userId: user.id, loginTime: Date.now() }));
+        showToast(`Welcome back, ${user.name}!`, 'success');
+        showAppView();
+      } else {
+        alertEl.textContent = 'Invalid email or password.';
+        alertEl.style.display = 'block';
+      }
+    });
+
+    function logout() {
+      localStorage.removeItem(STORAGE_KEY_SESSION);
+      currentUser = null;
+      showToast('Logged out successfully');
+      showLoginView();
+    }
+
+    /* ── Navigation Tabs ── */
+    function switchView(tab) {
+      activeTab = tab;
+      const isTracker = tab === 'tracker';
+
+      document.getElementById('tab-btn-tracker').classList.toggle('active', isTracker);
+      document.getElementById('tab-btn-users').classList.toggle('active', !isTracker);
+
+      document.getElementById('section-tracker').style.display = isTracker ? 'flex' : 'none';
+      document.getElementById('section-users').style.display = !isTracker ? 'flex' : 'none';
+
+      if (!isTracker && currentUser.role === 'admin') {
+        renderUsersList();
+      }
+    }
+
+    /* ── Search & Filter Logic ── */
+    function onSearchChange() {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => {
+        currentPage = 1;
+        renderTable();
+      }, 250);
+    }
+
+    function populateDepartmentFilter() {
+      const depts = Array.from(new Set(records.map(r => r.department).filter(Boolean))).sort();
+      const sel = document.getElementById('filter-dept');
+      const datalist = document.getElementById('dept-datalist');
+
+      const currentVal = sel.value;
+      sel.innerHTML = '<option value="">All Departments</option>';
+      datalist.innerHTML = '';
+
+      depts.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d;
+        opt.textContent = d;
+        if (d === currentVal) opt.selected = true;
+        sel.appendChild(opt);
+
+        const dlOpt = document.createElement('option');
+        dlOpt.value = d;
+        datalist.appendChild(dlOpt);
+      });
+    }
+
+    function getFilteredRecords() {
+      const searchTerm = document.getElementById('search-box').value.trim().toLowerCase();
+      const deptFilter = document.getElementById('filter-dept').value;
+      const statusFilter = document.getElementById('filter-status').value;
+      const typeFilter = document.getElementById('filter-type').value;
+
+      return records.filter(r => {
+        if (deptFilter && r.department !== deptFilter) return false;
+        if (statusFilter && r.status !== statusFilter) return false;
+        if (typeFilter && r.requestType !== typeFilter) return false;
+
+        if (searchTerm) {
+          const haystack = [
+            r.trackerNo,
+            r.department,
+            r.subject,
+            r.requestType,
+            r.developer,
+            r.status,
+            r.owner,
+            r.releasePR,
+            r.sfdcStatus
+          ].filter(Boolean).join(' ').toLowerCase();
+
+          if (!haystack.includes(searchTerm)) return false;
+        }
+
+        return true;
+      });
+    }
+
+    /* ── Summary Statistics ── */
+    function updateStats() {
+      let active = 0;
+      let deployed = 0;
+      let blocked = 0;
+      let overdue = 0;
+
+      records.forEach(r => {
+        if (r.status === 'In Progress' || r.status === 'Open' || r.status === 'In Review' || r.status === 'Testing') {
+          active++;
+        }
+        if (r.status === 'Deployed') deployed++;
+        if (r.status === 'Blocked') blocked++;
+        if (isOverdue(r.expectedProdDate, r.status)) overdue++;
+      });
+
+      document.getElementById('stat-total').textContent = records.length;
+      document.getElementById('stat-active').textContent = active;
+      document.getElementById('stat-deployed').textContent = deployed;
+      document.getElementById('stat-blocked').textContent = blocked;
+      document.getElementById('stat-overdue').textContent = overdue;
+    }
+
+    /* ── Table Sorting ── */
+    function sortTable(column) {
+      if (sortColumn === column) {
+        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortColumn = column;
+        sortDirection = 'asc';
+      }
+      renderTable();
+    }
+
+    function updateSortHeaderStyles() {
+      document.querySelectorAll('#tracker-table th[data-col]').forEach(th => {
+        const col = th.getAttribute('data-col');
+        const indicator = th.querySelector('.sort-indicator');
+        if (col === sortColumn) {
+          th.classList.add('sorted');
+          indicator.textContent = sortDirection === 'asc' ? '▲' : '▼';
+        } else {
+          th.classList.remove('sorted');
+          indicator.textContent = '▲';
+        }
+      });
+    }
+
+    /* ── Render Main Tracker Table ── */
+    function renderTable() {
+      updateSortHeaderStyles();
+      const filtered = getFilteredRecords();
+
+      // Sort
+      filtered.sort((a, b) => {
+        let valA = (a[sortColumn] || '').toString().toLowerCase();
+        let valB = (b[sortColumn] || '').toString().toLowerCase();
+
+        if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+        if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+
+      const totalItems = filtered.length;
+      const totalPages = Math.ceil(totalItems / pageSize) || 1;
+      if (currentPage > totalPages) currentPage = totalPages;
+      if (currentPage < 1) currentPage = 1;
+
+      const startIndex = (currentPage - 1) * pageSize;
+      const pageData = filtered.slice(startIndex, startIndex + pageSize);
+
+      const tbody = document.getElementById('tracker-tbody');
+      const emptyState = document.getElementById('table-empty');
+
+      if (totalItems === 0) {
+        tbody.innerHTML = '';
+        emptyState.style.display = 'block';
+      } else {
+        emptyState.style.display = 'none';
+        const canEdit = currentUser && (currentUser.role === 'admin' || currentUser.role === 'developer');
+        const isAdmin = currentUser && currentUser.role === 'admin';
+
+        tbody.innerHTML = pageData.map(r => {
+          const overdue = isOverdue(r.expectedProdDate, r.status);
+          const prDisplay = r.releasePR ? (
+            r.releasePR.startsWith('http') 
+              ? `<a href="${escapeHTML(r.releasePR)}" target="_blank" rel="noopener noreferrer" class="pr-link" onclick="event.stopPropagation()">View PR ↗</a>` 
+              : `<span class="pr-link" style="color:var(--gray-700)">${escapeHTML(r.releasePR)}</span>`
+          ) : '<span style="color:var(--gray-400)">—</span>';
+
+          const sfdcClass = r.sfdcStatus === 'Open' ? 'badge-sfdc-open' : (r.sfdcStatus === 'Closed' ? 'badge-sfdc-closed' : 'badge-sfdc-pending');
+          const sfdcBadge = r.sfdcStatus ? `<span class="badge ${sfdcClass}">${escapeHTML(r.sfdcStatus)}</span>` : '<span style="color:var(--gray-400)">—</span>';
+
+          const statusClass = 'badge-' + r.status.toLowerCase().replace(/\s+/g, '-');
+
+          return `
+            <tr class="${overdue ? 'row-overdue' : ''}" onclick="viewRecordDetails('${r.id}')">
+              <td class="sticky-col">
+                <div class="tracker-no-cell">
+                  ${escapeHTML(r.trackerNo)}
+                  ${overdue ? '<span class="badge-overdue" title="Past Expected Deployment Date">⚠️ Overdue</span>' : ''}
+                </div>
+              </td>
+              <td>${escapeHTML(r.department)}</td>
+              <td style="max-width: 280px; overflow: hidden; text-overflow: ellipsis; font-weight: 500;" title="${escapeHTML(r.subject)}">
+                ${escapeHTML(r.subject)}
+              </td>
+              <td>${escapeHTML(r.requestType)}</td>
+              <td>${escapeHTML(r.developer)}</td>
+              <td><span class="badge ${statusClass}">${escapeHTML(r.status)}</span></td>
+              <td>${formatDate(r.expectedProdDate)}</td>
+              <td>${formatDate(r.prodDeployDate)}</td>
+              <td>${formatDate(r.businessApprovalDate)}</td>
+              <td>${prDisplay}</td>
+              <td>${formatDate(r.createdDate)}</td>
+              <td>${escapeHTML(r.owner || '—')}</td>
+              <td>${sfdcBadge}</td>
+              <td class="action-cell" style="text-align: right;" onclick="event.stopPropagation()">
+                <div style="display: inline-flex; gap: 4px;">
+                  ${canEdit ? `
+                    <button class="btn-icon" onclick="openRecordModal('${r.id}')" title="Edit Record">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                    </button>
+                  ` : ''}
+                  ${isAdmin ? `
+                    <button class="btn-icon delete" onclick="confirmDeleteRecord('${r.id}')" title="Delete Record">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
+                  ` : ''}
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      // Pagination Controls
+      document.getElementById('pagination-info').textContent = 
+        totalItems === 0 
+          ? '0 items' 
+          : `Showing ${startIndex + 1}-${Math.min(startIndex + pageSize, totalItems)} of ${totalItems}`;
+
+      document.getElementById('btn-prev-page').disabled = currentPage <= 1;
+      document.getElementById('btn-next-page').disabled = currentPage >= totalPages;
+    }
+
+    function changePageSize() {
+      pageSize = parseInt(document.getElementById('page-size').value, 10);
+      currentPage = 1;
+      renderTable();
+    }
+
+    function prevPage() {
+      if (currentPage > 1) {
+        currentPage--;
+        renderTable();
+      }
+    }
+
+    function nextPage() {
+      const filtered = getFilteredRecords();
+      const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+      if (currentPage < totalPages) {
+        currentPage++;
+        renderTable();
+      }
+    }
+
+    /* ── Add / Edit Tracker Record Modal ── */
+    function openRecordModal(id = null) {
+      currentEditingRecordId = id;
+      const isEdit = Boolean(id);
+
+      document.getElementById('modal-record-title').textContent = isEdit ? 'Edit Development Record' : 'New Development Record';
+      document.getElementById('btn-save-record').textContent = isEdit ? 'Update Record' : 'Create Record';
+
+      // Clear field feedback errors
+      document.querySelectorAll('.input-feedback').forEach(f => f.classList.remove('visible'));
+      document.querySelectorAll('.form-control').forEach(fc => fc.classList.remove('error'));
+
+      if (isEdit) {
+        const item = records.find(r => r.id === id);
+        if (!item) return;
+
+        document.getElementById('rec-trackerno').value = item.trackerNo || '';
+        document.getElementById('rec-dept').value = item.department || '';
+        document.getElementById('rec-subject').value = item.subject || '';
+        document.getElementById('rec-type').value = item.requestType || '';
+        document.getElementById('rec-developer').value = item.developer || '';
+        document.getElementById('rec-status').value = item.status || 'Open';
+        document.getElementById('rec-owner').value = item.owner || '';
+        document.getElementById('rec-expected-date').value = item.expectedProdDate || '';
+        document.getElementById('rec-prod-date').value = item.prodDeployDate || '';
+        document.getElementById('rec-approval-date').value = item.businessApprovalDate || '';
+        document.getElementById('rec-pr').value = item.releasePR || '';
+        document.getElementById('rec-sfdc').value = item.sfdcStatus || '';
+      } else {
+        document.getElementById('form-record').reset();
+        // Auto-increment suggestion
+        const nextNum = records.length + 1;
+        const year = new Date().getFullYear();
+        document.getElementById('rec-trackerno').value = `TRK-${year}-${String(nextNum).padStart(3, '0')}`;
+        document.getElementById('rec-status').value = 'Open';
+      }
+
+      openModal('modal-record');
+    }
+
+    function saveRecord(e) {
+      e.preventDefault();
+
+      const trackerNo = document.getElementById('rec-trackerno').value.trim();
+      const department = document.getElementById('rec-dept').value.trim();
+      const subject = document.getElementById('rec-subject').value.trim();
+      const requestType = document.getElementById('rec-type').value;
+      const developer = document.getElementById('rec-developer').value.trim();
+      const status = document.getElementById('rec-status').value;
+      const owner = document.getElementById('rec-owner').value.trim();
+      const expectedProdDate = document.getElementById('rec-expected-date').value;
+      const prodDeployDate = document.getElementById('rec-prod-date').value;
+      const businessApprovalDate = document.getElementById('rec-approval-date').value;
+      const releasePR = document.getElementById('rec-pr').value.trim();
+      const sfdcStatus = document.getElementById('rec-sfdc').value;
+
+      if (!trackerNo || !department || !subject || !requestType || !developer || !status) {
+        showToast('Please fill all required fields.', 'error');
+        return;
+      }
+
+      // Check unique tracker number
+      const duplicate = records.find(r => r.trackerNo.toLowerCase() === trackerNo.toLowerCase() && r.id !== currentEditingRecordId);
+      if (duplicate) {
+        showToast(`Tracker No. "${trackerNo}" already exists!`, 'error');
+        return;
+      }
+
+      const today = new Date().toISOString().split('T')[0];
+
+      if (currentEditingRecordId) {
+        const idx = records.findIndex(r => r.id === currentEditingRecordId);
+        if (idx !== -1) {
+          records[idx] = {
+            ...records[idx],
+            trackerNo,
+            department,
+            subject,
+            requestType,
+            developer,
+            status,
+            owner,
+            expectedProdDate,
+            prodDeployDate,
+            businessApprovalDate,
+            releasePR,
+            sfdcStatus,
+            updatedAt: today
+          };
+          showToast('Record updated successfully', 'success');
+        }
+      } else {
+        const newRecord = {
+          id: 'rec-' + Date.now(),
+          trackerNo,
+          department,
+          subject,
+          requestType,
+          developer,
+          status,
+          owner,
+          expectedProdDate,
+          prodDeployDate,
+          businessApprovalDate,
+          releasePR,
+          sfdcStatus,
+          createdDate: today
+        };
+        records.unshift(newRecord);
+        showToast('Record created successfully', 'success');
+      }
+
+      saveRecordsToStorage();
+      closeModal('modal-record');
+      populateDepartmentFilter();
+      updateStats();
+      renderTable();
+    }
+
+    function confirmDeleteRecord(id) {
+      const record = records.find(r => r.id === id);
+      if (!record) return;
+
+      document.getElementById('confirm-title').textContent = 'Delete Tracker Record';
+      document.getElementById('confirm-msg').textContent = `Are you sure you want to permanently delete "${record.trackerNo} - ${record.subject}"?`;
+      
+      const confirmBtn = document.getElementById('btn-confirm-action');
+      confirmBtn.onclick = () => {
+        records = records.filter(r => r.id !== id);
+        saveRecordsToStorage();
+        closeModal('modal-confirm');
+        showToast('Record deleted successfully', 'success');
+        populateDepartmentFilter();
+        updateStats();
+        renderTable();
+      };
+
+      openModal('modal-confirm');
+    }
+
+    /* ── View Record Details Modal ── */
+    function viewRecordDetails(id) {
+      const item = records.find(r => r.id === id);
+      if (!item) return;
+
+      currentViewingRecordId = id;
+      document.getElementById('view-modal-title').textContent = `${item.trackerNo} — Details`;
+
+      const detailsContainer = document.getElementById('view-record-details');
+      const canEdit = currentUser && (currentUser.role === 'admin' || currentUser.role === 'developer');
+      document.getElementById('btn-quick-edit').style.display = canEdit ? 'inline-flex' : 'none';
+
+      const fields = [
+        { label: 'Tracker No.', value: item.trackerNo, span: false },
+        { label: 'Department', value: item.department, span: false },
+        { label: 'Subject', value: item.subject, span: true },
+        { label: 'Type of Request', value: item.requestType, span: false },
+        { label: 'Developer', value: item.developer, span: false },
+        { label: 'Status', value: item.status, span: false },
+        { label: 'Owner', value: item.owner || '—', span: false },
+        { label: 'Expected Prod Date', value: formatDate(item.expectedProdDate), span: false },
+        { label: 'Prod Deployment Date', value: formatDate(item.prodDeployDate), span: false },
+        { label: 'Business Approval Date', value: formatDate(item.businessApprovalDate), span: false },
+        { label: 'Release Pull Request', value: item.releasePR || '—', span: false },
+        { label: 'Created Date', value: formatDate(item.createdDate), span: false },
+        { label: 'SFDC Status', value: item.sfdcStatus || '—', span: false }
+      ];
+
+      detailsContainer.innerHTML = fields.map(f => `
+        <div class="detail-item ${f.span ? 'span-full' : ''}">
+          <span class="detail-label">${escapeHTML(f.label)}</span>
+          <span class="detail-value">${f.label.includes('Date') ? f.value : escapeHTML(f.value)}</span>
+        </div>
+      `).join('');
+
+      openModal('modal-view-record');
+    }
+
+    function triggerQuickEdit() {
+      closeModal('modal-view-record');
+      if (currentViewingRecordId) {
+        openRecordModal(currentViewingRecordId);
+      }
+    }
+
+    /* ── User Management Modal & Logic ── */
+    function renderUsersList() {
+      const container = document.getElementById('users-grid');
+      container.innerHTML = users.map(u => {
+        const initials = u.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        const isSelf = currentUser && currentUser.id === u.id;
+
+        return `
+          <div class="user-card">
+            <div class="user-card-main">
+              <div class="user-card-avatar">${initials}</div>
+              <div class="user-card-meta">
+                <span class="user-card-name">${escapeHTML(u.name)} ${isSelf ? '<small style="color:var(--primary)">(You)</small>' : ''}</span>
+                <span class="user-card-email">${escapeHTML(u.email)}</span>
+                <span class="user-role-badge user-role-${u.role}">${escapeHTML(u.role)}</span>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 4px;">
+              <button class="btn-icon" onclick="openUserModal('${u.id}')" title="Edit User">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              </button>
+              ${!isSelf ? `
+                <button class="btn-icon delete" onclick="confirmDeleteUser('${u.id}')" title="Delete User">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function openUserModal(id = null) {
+      currentEditingUserId = id;
+      const isEdit = Boolean(id);
+
+      document.getElementById('modal-user-title').textContent = isEdit ? 'Edit User Account' : 'Add New User';
+      document.getElementById('btn-save-user').textContent = isEdit ? 'Update User' : 'Create User';
+
+      const passInput = document.getElementById('user-password');
+      const passHint = document.getElementById('user-password-hint');
+
+      if (isEdit) {
+        const u = users.find(x => x.id === id);
+        if (!u) return;
+
+        document.getElementById('user-name').value = u.name;
+        document.getElementById('user-email').value = u.email;
+        document.getElementById('user-role').value = u.role;
+        passInput.value = '';
+        passInput.required = false;
+        passHint.textContent = 'Leave empty to keep current password.';
+      } else {
+        document.getElementById('form-user').reset();
+        passInput.required = true;
+        passHint.textContent = 'Min. 6 characters.';
+      }
+
+      openModal('modal-user');
+    }
+
+    async function saveUser(e) {
+      e.preventDefault();
+
+      const name = document.getElementById('user-name').value.trim();
+      const email = document.getElementById('user-email').value.trim().toLowerCase();
+      const role = document.getElementById('user-role').value;
+      const password = document.getElementById('user-password').value;
+
+      if (!name || !email || !role) {
+        showToast('Please fill all required fields.', 'error');
+        return;
+      }
+
+      // Check duplicate email
+      const dup = users.find(u => u.email.toLowerCase() === email && u.id !== currentEditingUserId);
+      if (dup) {
+        showToast('A user with this email already exists.', 'error');
+        return;
+      }
+
+      if (currentEditingUserId) {
+        const idx = users.findIndex(u => u.id === currentEditingUserId);
+        if (idx !== -1) {
+          users[idx].name = name;
+          users[idx].email = email;
+          users[idx].role = role;
+          if (password) {
+            if (password.length < 6) {
+              showToast('Password must be at least 6 characters.', 'error');
+              return;
+            }
+            users[idx].passwordHash = await hashPassword(password);
+          }
+          showToast('User updated successfully', 'success');
+        }
+      } else {
+        if (!password || password.length < 6) {
+          showToast('Password must be at least 6 characters.', 'error');
+          return;
+        }
+
+        const newUser = {
+          id: 'usr-' + Date.now(),
+          name,
+          email,
+          role,
+          passwordHash: await hashPassword(password)
+        };
+        users.push(newUser);
+        showToast(`User "${name}" created successfully`, 'success');
+      }
+
+      saveUsersToStorage();
+      closeModal('modal-user');
+      renderUsersList();
+    }
+
+    function confirmDeleteUser(id) {
+      const user = users.find(u => u.id === id);
+      if (!user) return;
+
+      document.getElementById('confirm-title').textContent = 'Delete User';
+      document.getElementById('confirm-msg').textContent = `Are you sure you want to remove ${user.name} (${user.email})?`;
+
+      const confirmBtn = document.getElementById('btn-confirm-action');
+      confirmBtn.onclick = () => {
+        users = users.filter(u => u.id !== id);
+        saveUsersToStorage();
+        closeModal('modal-confirm');
+        showToast('User removed successfully', 'success');
+        renderUsersList();
+      };
+
+      openModal('modal-confirm');
+    }
+
+    /* ── Export CSV ── */
+    function exportFilteredCSV() {
+      const data = getFilteredRecords();
+      if (!data.length) {
+        showToast('No records to export.', 'error');
+        return;
+      }
+
+      const headers = [
+        'Tracker No.',
+        'Department',
+        'Subject',
+        'Type of Request',
+        'Developer',
+        'Status',
+        'Expected Prod Deployment Date',
+        'Prod Deployment Date',
+        'Business Approval Date',
+        'Release Pull Request',
+        'Created Date',
+        'Owner',
+        'SFDC Status'
+      ];
+
+      const keys = [
+        'trackerNo',
+        'department',
+        'subject',
+        'requestType',
+        'developer',
+        'status',
+        'expectedProdDate',
+        'prodDeployDate',
+        'businessApprovalDate',
+        'releasePR',
+        'createdDate',
+        'owner',
+        'sfdcStatus'
+      ];
+
+      const csvRows = [
+        headers.join(','),
+        ...data.map(row => keys.map(k => {
+          let val = (row[k] || '').toString();
+          val = val.replace(/"/g, '""');
+          return `"${val}"`;
+        }).join(','))
+      ];
+
+      const blob = new Blob([csvRows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `DevTracker_Export_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast('CSV export started');
+    }
+
+    /* ── Modal & Toast Helpers ── */
+    function openModal(id) {
+      const modal = document.getElementById(id);
+      if (modal) modal.classList.add('open');
+    }
+
+    function closeModal(id) {
+      const modal = document.getElementById(id);
+      if (modal) modal.classList.remove('open');
+    }
+
+    // Close on backdrop click
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+      backdrop.addEventListener('click', function(e) {
+        if (e.target === this) {
+          this.classList.remove('open');
+        }
+      });
+    });
+
+    // Close on ESC key
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-backdrop.open').forEach(m => m.classList.remove('open'));
+      }
+      if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+        const searchInput = document.getElementById('search-box');
+        if (searchInput && document.getElementById('view-app').style.display !== 'none') {
+          e.preventDefault();
+          searchInput.focus();
+        }
+      }
+    });
+
+    function togglePasswordVisibility(inputId, btn) {
+      const input = document.getElementById(inputId);
+      if (input.type === 'password') {
+        input.type = 'text';
+        btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+      } else {
+        input.type = 'password';
+        btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+      }
+    }
+
+    function showToast(message, type = '') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(8px)';
+        toast.style.transition = 'all 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+      }, 3200);
+    }
+
+    /* ── Application Startup ── */
+    window.addEventListener('DOMContentLoaded', async () => {
+      await initializeDatabase();
+      await checkAuthSession();
+    });
+  </script>
+</body>
+</html>
