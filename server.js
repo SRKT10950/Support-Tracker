@@ -22,7 +22,9 @@ const required = [
 ];
 const DB_QUERY_URL = 'https://db.mhservice.co.in/API/1/Support_Tracker/query';
 const SESSION_COOKIE = 'support_tracker_session';
+const DEVICE_COOKIE = 'support_tracker_device';
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
+const DEVICE_TTL_SECONDS = 365 * 24 * 60 * 60;
 let stateTableReady;
 
 function configError() {
@@ -67,10 +69,14 @@ async function verifyPassword(password, storedHash) {
 }
 
 function sessionToken(req) {
+  return cookieValue(req, SESSION_COOKIE);
+}
+
+function cookieValue(req, name) {
   const cookieHeader = req.headers.cookie || '';
-  const cookie = cookieHeader.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${SESSION_COOKIE}=`));
+  const cookie = cookieHeader.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
   if (!cookie) return null;
-  try { return decodeURIComponent(cookie.slice(SESSION_COOKIE.length + 1)); } catch { return null; }
+  try { return decodeURIComponent(cookie.slice(name.length + 1)); } catch { return null; }
 }
 
 function hashSessionToken(token) {
@@ -80,7 +86,50 @@ function hashSessionToken(token) {
 function setSessionCookie(req, res, token, maxAge) {
   const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
   const secure = forwardedProto === 'https' || Boolean(req.socket.encrypted);
-  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure ? '; Secure' : ''}`);
+  appendSetCookie(res, `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure ? '; Secure' : ''}`);
+}
+
+function appendSetCookie(res, value) {
+  const current = res.getHeader('Set-Cookie');
+  res.setHeader('Set-Cookie', current ? [...(Array.isArray(current) ? current : [current]), value] : value);
+}
+
+function clientDeviceType(req) {
+  const reported = String(req.headers['x-client-device-type'] || '').toLowerCase();
+  if (['desktop', 'mobile', 'tablet', 'other'].includes(reported)) return reported;
+  const agent = String(req.headers['user-agent'] || '');
+  if (/ipad|tablet/i.test(agent)) return 'tablet';
+  if (/mobile|iphone|android/i.test(agent)) return 'mobile';
+  return agent ? 'desktop' : 'other';
+}
+
+function requestOrigin(req, deviceId) {
+  const peerIp = req.socket.remoteAddress || '';
+  const forwardedFor = String(req.headers['x-forwarded-for'] || '').slice(0, 500);
+  const useForwardedIp = String(process.env.TRUST_PROXY || '').toLowerCase() === 'true';
+  const forwardedCandidate = forwardedFor.split(',')[0].trim();
+  const clientIp = useForwardedIp && net.isIP(forwardedCandidate) ? forwardedCandidate : peerIp;
+  return {
+    eventId: crypto.randomUUID(),
+    method: String(req.method || '').slice(0, 16),
+    path: new URL(req.url, 'http://localhost').pathname.slice(0, 500),
+    clientIp: clientIp.slice(0, 100),
+    peerIp: peerIp.slice(0, 100),
+    forwardedFor,
+    deviceId,
+    deviceType: clientDeviceType(req),
+    platform: String(req.headers['x-client-platform'] || '').slice(0, 200),
+    timezone: String(req.headers['x-client-timezone'] || '').slice(0, 100),
+    userAgent: String(req.headers['user-agent'] || '').slice(0, 1000),
+    sessionHash: sessionToken(req) ? hashSessionToken(sessionToken(req)) : null,
+  };
+}
+
+async function recordRequestAudit(origin, statusCode) {
+  await databaseQuery(
+    'INSERT INTO support_tracker_request_audit (event_id, method, path, status_code, client_ip, peer_ip, forwarded_for, device_id, device_type, platform, timezone, user_agent, session_hash, actor_user_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, (SELECT user_id FROM support_tracker_sessions WHERE token_hash = $13 AND expires_at > NOW()))',
+    [origin.eventId, origin.method, origin.path, statusCode, origin.clientIp, origin.peerIp, origin.forwardedFor, origin.deviceId, origin.deviceType, origin.platform, origin.timezone, origin.userAgent, origin.sessionHash],
+  );
 }
 
 function publicUser(user) {
@@ -153,6 +202,10 @@ async function ensureStateTable() {
       );
       await databaseQuery(
         'CREATE TABLE IF NOT EXISTS support_tracker_sessions (token_hash CHAR(64) PRIMARY KEY, user_id TEXT NOT NULL, expires_at TIMESTAMPTZ NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())',
+        [],
+      );
+      await databaseQuery(
+        'CREATE TABLE IF NOT EXISTS support_tracker_request_audit (event_id UUID PRIMARY KEY, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), method TEXT NOT NULL, path TEXT NOT NULL, status_code INTEGER NOT NULL, client_ip TEXT NOT NULL, peer_ip TEXT NOT NULL, forwarded_for TEXT NOT NULL, device_id TEXT NOT NULL, device_type TEXT NOT NULL, platform TEXT NOT NULL, timezone TEXT NOT NULL, user_agent TEXT NOT NULL, session_hash CHAR(64), actor_user_id TEXT)',
         [],
       );
 
@@ -301,6 +354,24 @@ async function normalizeAdminUsers(incomingUsers, currentState) {
 }
 
 const server = http.createServer(async (req, res) => {
+  const requestPath = new URL(req.url, 'http://localhost').pathname;
+  const isAppApiRequest = requestPath.startsWith('/api/') && requestPath !== '/api/health';
+  let deviceId = cookieValue(req, DEVICE_COOKIE);
+  if (isAppApiRequest) {
+    if (!deviceId || !/^[a-f0-9-]{36}$/i.test(deviceId)) {
+      deviceId = crypto.randomUUID();
+      const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+      const secure = forwardedProto === 'https' || Boolean(req.socket.encrypted);
+      appendSetCookie(res, `${DEVICE_COOKIE}=${deviceId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${DEVICE_TTL_SECONDS}${secure ? '; Secure' : ''}`);
+    }
+    const origin = requestOrigin(req, deviceId);
+    res.once('finish', () => {
+      recordRequestAudit(origin, res.statusCode).catch((error) => {
+        console.error(`Request audit write failed for ${origin.eventId}: ${error.message}`);
+      });
+    });
+  }
+
   if (req.url === '/api/health' && req.method === 'GET') {
     try {
       await readAppState();

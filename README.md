@@ -12,7 +12,8 @@ Set these environment variables in the Coolify application. Keep credentials in 
 - `INITIAL_ADMIN_EMAIL`: email for the first administrator.
 - `INITIAL_ADMIN_PASSWORD`: initial password, at least 12 characters. It is scrypt-hashed before storage. Once that admin exists, changing this variable does not reset its password.
 - `PORT`: application listen port. Set Coolify's service/domain target port to the same value (default `9010`).
+- `TRUST_PROXY`: set to `true` when all public requests pass through Coolify's proxy, so audit records use the forwarded visitor IP. The direct peer and forwarded-for chain are also recorded separately.
 
 On first database use, the app creates `support_tracker_app_state` and `support_tracker_sessions`. The database API key must be permitted to run the required `CREATE`, `SELECT`, `INSERT`, `UPDATE`, and `DELETE` statements. `/api/health` reports healthy only when the database is reachable and initialized.
 
-Sessions use random HttpOnly, SameSite=Lax cookies; PostgreSQL stores only the SHA-256 token hash, user ID, and expiry. Sessions expire after 12 hours, and logout revokes the server-side row.
+Sessions use random HttpOnly, SameSite=Lax cookies; PostgreSQL stores only the SHA-256 token hash, user ID, and expiry. Sessions expire after 12 hours, and logout revokes the server-side row. App API requests are recorded in `support_tracker_request_audit` with a random browser ID, request route and status, IP/forwarded-for data, user agent, reported platform/device class, time zone, and signed-in user ID when available. The time zone is a location hint; precise physical location is not collected.

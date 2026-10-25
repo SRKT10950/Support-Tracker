@@ -1577,6 +1577,17 @@
     const STORAGE_KEY_USERS = 'dt_users_v2';
     const STORAGE_KEY_RECORDS = 'dt_records_v2';
 
+    function appFetch(url, options = {}) {
+      const headers = new Headers(options.headers || {});
+      const userAgentData = navigator.userAgentData;
+      const userAgent = navigator.userAgent || '';
+      const deviceType = userAgentData?.mobile ? 'mobile' : (/ipad|tablet/i.test(userAgent) ? 'tablet' : (/mobile|iphone|android/i.test(userAgent) ? 'mobile' : 'desktop'));
+      headers.set('X-Client-Platform', userAgentData?.platform || navigator.platform || 'unknown');
+      headers.set('X-Client-Timezone', Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown');
+      headers.set('X-Client-Device-Type', deviceType);
+      return fetch(url, { ...options, headers, credentials: 'same-origin' });
+    }
+
     /* ── Application State ── */
     let currentUser = null;
     let records = [];
@@ -1644,7 +1655,7 @@
     }
 
     async function loadApplicationState() {
-      const response = await fetch('/api/state', { headers: { Accept: 'application/json' } });
+      const response = await appFetch('/api/state', { headers: { Accept: 'application/json' } });
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error || 'Could not load PostgreSQL data');
 
@@ -1671,7 +1682,7 @@
     }
 
     async function persistApplicationState() {
-      const response = await fetch('/api/state', {
+      const response = await appFetch('/api/state', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({ users, records }),
@@ -1695,7 +1706,7 @@
 
     /* ── Authentication & Session ── */
     async function checkAuthSession() {
-      const response = await fetch('/api/session', { headers: { Accept: 'application/json' } });
+      const response = await appFetch('/api/session', { headers: { Accept: 'application/json' } });
       if (!response.ok) {
         showLoginView();
         return;
@@ -1751,7 +1762,7 @@
       }
 
       try {
-        const response = await fetch('/api/login', {
+        const response = await appFetch('/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify({ email, password: pass }),
@@ -1774,7 +1785,7 @@
     });
 
     async function logout() {
-      try { await fetch('/api/logout', { method: 'POST' }); } catch (e) {}
+      try { await appFetch('/api/logout', { method: 'POST' }); } catch (e) {}
       currentUser = null;
       showToast('Logged out successfully');
       showLoginView();
@@ -2321,7 +2332,7 @@
       }
 
       try {
-        const response = await fetch('/api/users', {
+        const response = await appFetch('/api/users', {
           method: isEdit ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify({ id: currentEditingUserId, name, email, role, password }),
