@@ -2469,15 +2469,31 @@
         showToast('A project with this name already exists.', 'error');
         return;
       }
-      const previousProjects = projects;
-      const saved = { id: currentEditingProjectId || `prj-${crypto.randomUUID()}`, name, type, startDate, endDate };
-      projects = currentEditingProjectId ? projects.map(project => project.id === currentEditingProjectId ? saved : project) : [...projects, saved];
-      try { await persistApplicationState(); }
-      catch (error) { projects = previousProjects; showToast(`Database save failed: ${error.message}`, 'error'); return; }
+      const isEdit = Boolean(currentEditingProjectId);
+      let response;
+      try {
+        response = await appFetch('/api/projects', {
+          method: isEdit ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ id: currentEditingProjectId, name, type, startDate, endDate }),
+        });
+      } catch (error) {
+        showToast(`Could not save project: ${error.message}`, 'error');
+        return;
+      }
+      let result;
+      try { result = await response.json(); }
+      catch { showToast('Could not read the project save response.', 'error'); return; }
+      if (!response.ok || !result.success || !result.project) {
+        showToast(result.error || 'Could not save project.', 'error');
+        return;
+      }
+      const saved = result.project;
+      projects = isEdit ? projects.map(project => project.id === saved.id ? saved : project) : [...projects, saved];
       closeModal('modal-project');
       renderProjectsList();
       renderUsersList();
-      showToast(currentEditingProjectId ? 'Project updated successfully.' : 'Project created successfully.', 'success');
+      showToast(isEdit ? 'Project updated successfully.' : 'Project created successfully.', 'success');
     }
 
     function confirmDeleteProject(id) {

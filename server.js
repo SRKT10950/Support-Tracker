@@ -569,6 +569,31 @@ const server = http.createServer((req, res) => requestContext.run(databaseDevice
     }
   }
 
+  if (req.url === '/api/projects' && (req.method === 'POST' || req.method === 'PUT')) {
+    try {
+      const user = await authenticatedUser(req);
+      if (!user) return sendJson(res, 401, { success: false, error: 'Sign in required' });
+      if (user.role !== 'admin') return sendJson(res, 403, { success: false, error: 'Administrator access required' });
+      const body = await readJsonBody(req, 16 * 1024);
+      const isUpdate = req.method === 'PUT';
+      const id = isUpdate ? String(body.id || '').trim() : `prj-${crypto.randomUUID()}`;
+      if (isUpdate && !id) return sendJson(res, 400, { success: false, error: 'Project ID is required' });
+      const state = await readAppState();
+      if (isUpdate && !state.projects.some((project) => project.id === id)) return sendJson(res, 404, { success: false, error: 'Project not found' });
+      const normalized = normalizeProjects([{ ...body, id }])[0];
+      if (state.projects.some((project) => project.id !== id && project.name.toLowerCase() === normalized.name.toLowerCase())) {
+        return sendJson(res, 409, { success: false, error: 'A project with this name already exists' });
+      }
+      const result = isUpdate
+        ? await databaseQuery('UPDATE support_tracker_projects SET name = $1, project_type = $2, start_date = $3, end_date = $4 WHERE project_id = $5 AND is_active = TRUE', [normalized.name, normalized.type, normalized.startDate, normalized.endDate, id])
+        : await databaseQuery('INSERT INTO support_tracker_projects (project_id, name, project_type, start_date, end_date) VALUES ($1, $2, $3, $4, $5)', [normalized.id, normalized.name, normalized.type, normalized.startDate, normalized.endDate]);
+      if (isUpdate && result.rowCount === 0 && result.affectedRows === 0) return sendJson(res, 404, { success: false, error: 'Project not found' });
+      return sendJson(res, isUpdate ? 200 : 201, { success: true, project: normalized });
+    } catch (error) {
+      return sendJson(res, error.statusCode || 502, { success: false, error: error.message || 'Could not save project' });
+    }
+  }
+
   if (req.url === '/api/projects' && req.method === 'DELETE') {
     try {
       const user = await authenticatedUser(req);
