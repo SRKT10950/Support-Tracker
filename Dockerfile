@@ -1,7 +1,8 @@
 FROM node:22-alpine
-ENV NODE_ENV=production PORT=8080
+ARG PORT=8080
+ENV NODE_ENV=production PORT=${PORT}
 WORKDIR /app
 COPY index.html admin_app.js server.js ./
-EXPOSE 8080
+EXPOSE ${PORT}
 USER node
 CMD ["node", "server.js"]

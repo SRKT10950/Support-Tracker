@@ -1,6 +1,9 @@
 services:
   support-tracker:
-    build: .
+    build:
+      context: .
+      args:
+        PORT: ${PORT:-8080}
     expose:
       - "${PORT:-8080}"
     environment:
