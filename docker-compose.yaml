@@ -3,11 +3,11 @@ services:
     build:
       context: .
       args:
-        PORT: ${PORT:-8080}
+        PORT: ${PORT:-9010}
     expose:
-      - "${PORT:-8080}"
+      - "${PORT:-9010}"
     environment:
-      PORT: ${PORT:-8080}
+      PORT: ${PORT:-9010}
       DB_API_KEY: ${DB_API_KEY:?Set DB_API_KEY in the deployment environment}
       DB_DEVICE_SECURITY_KEY: ${DB_DEVICE_SECURITY_KEY:?Set DB_DEVICE_SECURITY_KEY in the deployment environment}
       DB_DEVICE_NAME: ${DB_DEVICE_NAME:-SRKT-Laptop}
