@@ -10,13 +10,13 @@ services:
       PORT: ${PORT:-9010}
       DB_API_KEY: ${DB_API_KEY:?Set DB_API_KEY in the deployment environment}
       DB_DEVICE_SECURITY_KEY: ${DB_DEVICE_SECURITY_KEY:?Set DB_DEVICE_SECURITY_KEY in the deployment environment}
+      DB_CLIENT_IP: ${DB_CLIENT_IP:?Set DB_CLIENT_IP to this server's public egress IP}
       DB_DEVICE_NAME: ${DB_DEVICE_NAME:-SRKT-Laptop}
       DB_LOCATION: ${DB_LOCATION:?Set DB_LOCATION to the server or deployment location}
       DB_DEVICE_TYPE: ${DB_DEVICE_TYPE:-Desktop}
       DB_APP_NAME: ${DB_APP_NAME:-Support Tracker}
-      TRUST_PROXY: ${TRUST_PROXY:-false}
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:' + process.env.PORT).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:' + process.env.PORT + '/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3

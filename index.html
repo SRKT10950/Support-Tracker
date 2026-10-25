@@ -1573,7 +1573,7 @@
   <script>
     'use strict';
 
-    /* ── Local Storage Keys ── */
+    /* ── Legacy migration and browser session keys ── */
     const STORAGE_KEY_USERS = 'dt_users_v2';
     const STORAGE_KEY_RECORDS = 'dt_records_v2';
     const STORAGE_KEY_SESSION = 'dt_session_v2';
@@ -1746,10 +1746,11 @@
         localStorage.setItem(STORAGE_KEY_RECORDS, JSON.stringify(initialRecords));
       }
 
-      loadFromStorage();
+      loadLegacyStateFromStorage();
+      await loadApplicationState();
     }
 
-    function loadFromStorage() {
+    function loadLegacyStateFromStorage() {
       try {
         users = JSON.parse(localStorage.getItem(STORAGE_KEY_USERS) || '[]');
         records = JSON.parse(localStorage.getItem(STORAGE_KEY_RECORDS) || '[]');
@@ -1760,12 +1761,41 @@
       }
     }
 
-    function saveRecordsToStorage() {
-      localStorage.setItem(STORAGE_KEY_RECORDS, JSON.stringify(records));
+    async function loadApplicationState() {
+      const response = await fetch('/api/state', { headers: { Accept: 'application/json' } });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error || 'Could not load PostgreSQL data');
+
+      if (result.state) {
+        users = Array.isArray(result.state.users) ? result.state.users : [];
+        records = Array.isArray(result.state.records) ? result.state.records : [];
+      } else {
+        await persistApplicationState();
+      }
+
+      // Keep the browser session only. App data is now owned by PostgreSQL.
+      localStorage.removeItem(STORAGE_KEY_USERS);
+      localStorage.removeItem(STORAGE_KEY_RECORDS);
     }
 
-    function saveUsersToStorage() {
-      localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
+    async function persistApplicationState() {
+      const response = await fetch('/api/state', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ users, records }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error || 'Could not save PostgreSQL data');
+      localStorage.removeItem(STORAGE_KEY_USERS);
+      localStorage.removeItem(STORAGE_KEY_RECORDS);
+    }
+
+    async function saveRecordsToDatabase() {
+      return persistApplicationState();
+    }
+
+    async function saveUsersToDatabase() {
+      return persistApplicationState();
     }
 
     /* ── Authentication & Session ── */
@@ -1837,7 +1867,7 @@
         if (!user.passwordHash && user.password) {
           user.passwordHash = hash;
           delete user.password;
-          saveUsersToStorage();
+          await saveUsersToDatabase();
         }
 
         currentUser = user;
@@ -2143,8 +2173,9 @@
       openModal('modal-record');
     }
 
-    function saveRecord(e) {
+    async function saveRecord(e) {
       e.preventDefault();
+      const previousRecords = records.map(record => ({ ...record }));
 
       const trackerNo = document.getElementById('rec-trackerno').value.trim();
       const department = document.getElementById('rec-dept').value.trim();
@@ -2192,7 +2223,6 @@
             sfdcStatus,
             updatedAt: today
           };
-          showToast('Record updated successfully', 'success');
         }
       } else {
         const newRecord = {
@@ -2212,10 +2242,16 @@
           createdDate: today
         };
         records.unshift(newRecord);
-        showToast('Record created successfully', 'success');
       }
 
-      saveRecordsToStorage();
+      try {
+        await saveRecordsToDatabase();
+      } catch (error) {
+        records = previousRecords;
+        showToast(`Database save failed: ${error.message}`, 'error');
+        return;
+      }
+      showToast(currentEditingRecordId ? 'Record updated successfully' : 'Record created successfully', 'success');
       closeModal('modal-record');
       populateDepartmentFilter();
       updateStats();
@@ -2230,9 +2266,16 @@
       document.getElementById('confirm-msg').textContent = `Are you sure you want to permanently delete "${record.trackerNo} - ${record.subject}"?`;
       
       const confirmBtn = document.getElementById('btn-confirm-action');
-      confirmBtn.onclick = () => {
+      confirmBtn.onclick = async () => {
+        const previousRecords = records;
         records = records.filter(r => r.id !== id);
-        saveRecordsToStorage();
+        try {
+          await saveRecordsToDatabase();
+        } catch (error) {
+          records = previousRecords;
+          showToast(`Database save failed: ${error.message}`, 'error');
+          return;
+        }
         closeModal('modal-confirm');
         showToast('Record deleted successfully', 'success');
         populateDepartmentFilter();
@@ -2370,6 +2413,8 @@
         return;
       }
 
+      const previousUsers = users.map(user => ({ ...user }));
+      let successMessage;
       if (currentEditingUserId) {
         const idx = users.findIndex(u => u.id === currentEditingUserId);
         if (idx !== -1) {
@@ -2383,7 +2428,7 @@
             }
             users[idx].passwordHash = await hashPassword(password);
           }
-          showToast('User updated successfully', 'success');
+          successMessage = 'User updated successfully';
         }
       } else {
         if (!password || password.length < 6) {
@@ -2399,10 +2444,17 @@
           passwordHash: await hashPassword(password)
         };
         users.push(newUser);
-        showToast(`User "${name}" created successfully`, 'success');
+        successMessage = `User "${name}" created successfully`;
       }
 
-      saveUsersToStorage();
+      try {
+        await saveUsersToDatabase();
+      } catch (error) {
+        users = previousUsers;
+        showToast(`Database save failed: ${error.message}`, 'error');
+        return;
+      }
+      showToast(successMessage, 'success');
       closeModal('modal-user');
       renderUsersList();
     }
@@ -2415,9 +2467,16 @@
       document.getElementById('confirm-msg').textContent = `Are you sure you want to remove ${user.name} (${user.email})?`;
 
       const confirmBtn = document.getElementById('btn-confirm-action');
-      confirmBtn.onclick = () => {
+      confirmBtn.onclick = async () => {
+        const previousUsers = users;
         users = users.filter(u => u.id !== id);
-        saveUsersToStorage();
+        try {
+          await saveUsersToDatabase();
+        } catch (error) {
+          users = previousUsers;
+          showToast(`Database save failed: ${error.message}`, 'error');
+          return;
+        }
         closeModal('modal-confirm');
         showToast('User removed successfully', 'success');
         renderUsersList();
@@ -2549,8 +2608,16 @@
 
     /* ── Application Startup ── */
     window.addEventListener('DOMContentLoaded', async () => {
-      await initializeDatabase();
-      await checkAuthSession();
+      try {
+        await initializeDatabase();
+        await checkAuthSession();
+      } catch (error) {
+        console.error('Database initialization failed:', error);
+        showLoginView();
+        const alertEl = document.getElementById('login-alert');
+        alertEl.textContent = `Could not connect to PostgreSQL: ${error.message}`;
+        alertEl.style.display = 'block';
+      }
     });
   </script>
 </body>
