@@ -1133,6 +1133,7 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               User Management
             </button>
+            <button class="nav-tab" id="tab-btn-projects" onclick="switchView('projects')" style="display: none;">Projects</button>
           </nav>
         </div>
 
@@ -1359,6 +1360,20 @@
 
         <div class="user-cards-grid" id="users-grid"></div>
       </div>
+
+      <div id="section-projects" class="users-container" style="display: none;">
+        <div class="toolbar-card">
+          <div>
+            <h2 style="font-size: 1.15rem; font-weight: 700; color: var(--gray-900);">Project Configuration</h2>
+            <p style="font-size: 0.8rem; color: var(--gray-500);">Manage project types and schedule dates. Users can be assigned to multiple projects.</p>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="openProjectModal()">＋ Add Project</button>
+        </div>
+        <div class="user-cards-grid" id="projects-grid"></div>
+        <div class="empty-state" id="projects-empty" style="display:none; position:static; padding:2rem;">
+          <h3>No projects configured</h3><p>Add a project to assign it to users.</p>
+        </div>
+      </div>
     </main>
   </section>
 
@@ -1526,6 +1541,12 @@
           </div>
 
           <div class="form-group">
+            <label for="user-projects">Assign Projects</label>
+            <select id="user-projects" class="form-control" multiple size="4" aria-describedby="user-projects-hint"></select>
+            <span id="user-projects-hint" style="font-size: 0.725rem; color: var(--gray-500);">Select one or more projects (Ctrl/Cmd-click for multiple).</span>
+          </div>
+
+          <div class="form-group">
             <label for="user-password" id="user-password-label">Password *</label>
             <div class="password-wrap">
               <input type="password" id="user-password" class="form-control" placeholder="••••••••" />
@@ -1540,6 +1561,27 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeModal('modal-user')">Cancel</button>
           <button type="submit" class="btn btn-primary" id="btn-save-user">Create User</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="modal-project">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-project-title">Add Project</h3>
+        <button class="btn-icon" onclick="closeModal('modal-project')" aria-label="Close">×</button>
+      </div>
+      <form id="form-project" onsubmit="saveProject(event)">
+        <div class="modal-body">
+          <div class="form-group"><label for="project-name">Project Name *</label><input id="project-name" class="form-control" maxlength="120" required /></div>
+          <div class="form-group"><label for="project-type">Type *</label><input id="project-type" class="form-control" maxlength="80" required placeholder="e.g. Product, Client, Internal" /></div>
+          <div class="form-group"><label for="project-start-date">Start Date *</label><input id="project-start-date" type="date" class="form-control" required /></div>
+          <div class="form-group"><label for="project-end-date">End Date *</label><input id="project-end-date" type="date" class="form-control" required /></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-project')">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-project">Save Project</button>
         </div>
       </form>
     </div>
@@ -1592,10 +1634,12 @@
     let currentUser = null;
     let records = [];
     let users = [];
+    let projects = [];
     let activeTab = 'tracker';
 
     let currentEditingRecordId = null;
     let currentEditingUserId = null;
+    let currentEditingProjectId = null;
     let currentViewingRecordId = null;
     let pendingConfirmAction = null;
 
@@ -1659,7 +1703,8 @@
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error || 'Could not load PostgreSQL data');
 
-      const remoteState = result.state || { users: [], records: [], needsMigration: false };
+      const remoteState = result.state || { users: [], records: [], projects: [], needsMigration: false };
+      projects = Array.isArray(remoteState.projects) ? remoteState.projects : [];
       if (remoteState.needsMigration && currentUser && currentUser.role === 'admin') {
         const mergedUsers = Array.isArray(remoteState.users) ? [...remoteState.users] : [];
         for (const legacyUser of users) {
@@ -1685,12 +1730,13 @@
       const response = await appFetch('/api/state', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ users, records }),
+        body: JSON.stringify({ users, records, projects }),
       });
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error || 'Could not save PostgreSQL data');
       if (Array.isArray(result.users)) users = result.users;
       if (Array.isArray(result.records)) records = result.records;
+      if (Array.isArray(result.projects)) projects = result.projects;
       if (currentUser) currentUser = users.find(user => user.id === currentUser.id) || currentUser;
       localStorage.removeItem(STORAGE_KEY_USERS);
       localStorage.removeItem(STORAGE_KEY_RECORDS);
@@ -1738,6 +1784,7 @@
       // Admin tabs visibility
       const isAdmin = currentUser.role === 'admin';
       document.getElementById('tab-btn-users').style.display = isAdmin ? 'inline-flex' : 'none';
+      document.getElementById('tab-btn-projects').style.display = isAdmin ? 'inline-flex' : 'none';
 
       // Control access for new record creation
       const canEdit = currentUser.role === 'admin' || currentUser.role === 'developer';
@@ -1746,7 +1793,10 @@
       populateDepartmentFilter();
       updateStats();
       renderTable();
-      if (isAdmin) renderUsersList();
+      if (isAdmin) {
+        renderUsersList();
+        renderProjectsList();
+      }
     }
 
     document.getElementById('form-login').addEventListener('submit', async function(e) {
@@ -1795,16 +1845,18 @@
     function switchView(tab) {
       activeTab = tab;
       const isTracker = tab === 'tracker';
+      const isUsers = tab === 'users';
 
       document.getElementById('tab-btn-tracker').classList.toggle('active', isTracker);
-      document.getElementById('tab-btn-users').classList.toggle('active', !isTracker);
+      document.getElementById('tab-btn-users').classList.toggle('active', isUsers);
+      document.getElementById('tab-btn-projects').classList.toggle('active', tab === 'projects');
 
       document.getElementById('section-tracker').style.display = isTracker ? 'flex' : 'none';
-      document.getElementById('section-users').style.display = !isTracker ? 'flex' : 'none';
+      document.getElementById('section-users').style.display = isUsers ? 'flex' : 'none';
+      document.getElementById('section-projects').style.display = tab === 'projects' ? 'flex' : 'none';
 
-      if (!isTracker && currentUser.role === 'admin') {
-        renderUsersList();
-      }
+      if (currentUser?.role === 'admin' && isUsers) renderUsersList();
+      if (currentUser?.role === 'admin' && tab === 'projects') renderProjectsList();
     }
 
     /* ── Search & Filter Logic ── */
@@ -2167,21 +2219,21 @@
       if (!record) return;
 
       document.getElementById('confirm-title').textContent = 'Delete Tracker Record';
-      document.getElementById('confirm-msg').textContent = `Are you sure you want to permanently delete "${record.trackerNo} - ${record.subject}"?`;
+      document.getElementById('confirm-msg').textContent = `Remove "${record.trackerNo} - ${record.subject}" from the active tracker?`;
       
       const confirmBtn = document.getElementById('btn-confirm-action');
       confirmBtn.onclick = async () => {
-        const previousRecords = records;
-        records = records.filter(r => r.id !== id);
         try {
-          await saveRecordsToDatabase();
+          const response = await appFetch('/api/records', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+          const result = await response.json();
+          if (!response.ok || !result.success) throw new Error(result.error || 'Could not remove record');
         } catch (error) {
-          records = previousRecords;
           showToast(`Database save failed: ${error.message}`, 'error');
           return;
         }
+        records = records.filter(r => r.id !== id);
         closeModal('modal-confirm');
-        showToast('Record deleted successfully', 'success');
+        showToast('Record removed from the active tracker', 'success');
         populateDepartmentFilter();
         updateStats();
         renderTable();
@@ -2241,6 +2293,7 @@
       container.innerHTML = users.map(u => {
         const initials = u.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
         const isSelf = currentUser && currentUser.id === u.id;
+        const assignedProjects = (u.projectIds || []).map(id => projects.find(project => project.id === id)?.name).filter(Boolean);
 
         return `
           <div class="user-card">
@@ -2250,6 +2303,7 @@
                 <span class="user-card-name">${escapeHTML(u.name)} ${isSelf ? '<small style="color:var(--primary)">(You)</small>' : ''}</span>
                 <span class="user-card-email">${escapeHTML(u.email)}</span>
                 <span class="user-role-badge user-role-${u.role}">${escapeHTML(u.role)}</span>
+                <span class="user-card-email">Projects: ${assignedProjects.length ? escapeHTML(assignedProjects.join(', ')) : 'None assigned'}</span>
               </div>
             </div>
 
@@ -2285,11 +2339,13 @@
         document.getElementById('user-name').value = u.name;
         document.getElementById('user-email').value = u.email;
         document.getElementById('user-role').value = u.role;
+        populateUserProjectOptions(u.projectIds || []);
         passInput.value = '';
         passInput.required = false;
         passHint.textContent = 'Leave empty to keep current password.';
       } else {
         document.getElementById('form-user').reset();
+        populateUserProjectOptions([]);
         passInput.required = true;
         passHint.textContent = 'Min. 6 characters.';
       }
@@ -2304,6 +2360,7 @@
       const email = document.getElementById('user-email').value.trim().toLowerCase();
       const role = document.getElementById('user-role').value;
       const password = document.getElementById('user-password').value;
+      const projectIds = Array.from(document.getElementById('user-projects').selectedOptions, option => option.value);
 
       if (!name || !email || !role) {
         showToast('Please fill all required fields.', 'error');
@@ -2335,7 +2392,7 @@
         const response = await appFetch('/api/users', {
           method: isEdit ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify({ id: currentEditingUserId, name, email, role, password }),
+          body: JSON.stringify({ id: currentEditingUserId, name, email, role, password, projectIds }),
         });
         const result = await response.json();
         if (!response.ok || !result.success) throw new Error(result.error || 'Could not save user');
@@ -2356,26 +2413,114 @@
       renderUsersList();
     }
 
+    function populateUserProjectOptions(selectedIds) {
+      const select = document.getElementById('user-projects');
+      select.innerHTML = projects.length
+        ? projects.map(project => `<option value="${escapeHTML(project.id)}">${escapeHTML(project.name)} (${escapeHTML(project.type)})</option>`).join('')
+        : '<option value="" disabled>No projects configured</option>';
+      const selected = new Set(selectedIds);
+      Array.from(select.options).forEach(option => { option.selected = selected.has(option.value); });
+    }
+
+    function renderProjectsList() {
+      const container = document.getElementById('projects-grid');
+      const empty = document.getElementById('projects-empty');
+      empty.style.display = projects.length ? 'none' : 'block';
+      container.innerHTML = projects.map(project => `
+        <div class="user-card">
+          <div class="user-card-main"><div class="user-card-meta">
+            <span class="user-card-name">${escapeHTML(project.name)}</span>
+            <span class="user-card-email">${escapeHTML(project.type)} · ${escapeHTML(project.startDate)} – ${escapeHTML(project.endDate)}</span>
+          </div></div>
+          <div style="display:flex;gap:4px">
+            <button class="btn-icon" onclick="openProjectModal('${escapeHTML(project.id)}')" title="Edit project">✎</button>
+            <button class="btn-icon delete" onclick="confirmDeleteProject('${escapeHTML(project.id)}')" title="Delete project">×</button>
+          </div>
+        </div>`).join('');
+    }
+
+    function openProjectModal(id = null) {
+      currentEditingProjectId = id;
+      document.getElementById('form-project').reset();
+      document.getElementById('modal-project-title').textContent = id ? 'Edit Project' : 'Add Project';
+      document.getElementById('btn-save-project').textContent = id ? 'Update Project' : 'Save Project';
+      if (id) {
+        const project = projects.find(item => item.id === id);
+        if (!project) return;
+        document.getElementById('project-name').value = project.name;
+        document.getElementById('project-type').value = project.type;
+        document.getElementById('project-start-date').value = project.startDate;
+        document.getElementById('project-end-date').value = project.endDate;
+      }
+      openModal('modal-project');
+    }
+
+    async function saveProject(event) {
+      event.preventDefault();
+      const name = document.getElementById('project-name').value.trim();
+      const type = document.getElementById('project-type').value.trim();
+      const startDate = document.getElementById('project-start-date').value;
+      const endDate = document.getElementById('project-end-date').value;
+      if (!name || !type || !startDate || !endDate || endDate < startDate) {
+        showToast('Enter all project details and ensure the end date is on or after the start date.', 'error');
+        return;
+      }
+      if (projects.some(project => project.id !== currentEditingProjectId && project.name.toLowerCase() === name.toLowerCase())) {
+        showToast('A project with this name already exists.', 'error');
+        return;
+      }
+      const previousProjects = projects;
+      const saved = { id: currentEditingProjectId || `prj-${crypto.randomUUID()}`, name, type, startDate, endDate };
+      projects = currentEditingProjectId ? projects.map(project => project.id === currentEditingProjectId ? saved : project) : [...projects, saved];
+      try { await persistApplicationState(); }
+      catch (error) { projects = previousProjects; showToast(`Database save failed: ${error.message}`, 'error'); return; }
+      closeModal('modal-project');
+      renderProjectsList();
+      renderUsersList();
+      showToast(currentEditingProjectId ? 'Project updated successfully.' : 'Project created successfully.', 'success');
+    }
+
+    function confirmDeleteProject(id) {
+      const project = projects.find(item => item.id === id);
+      if (!project) return;
+      document.getElementById('confirm-title').textContent = 'Delete Project';
+      document.getElementById('confirm-msg').textContent = `Archive ${project.name}? It will no longer appear in project assignments.`;
+      document.getElementById('btn-confirm-action').onclick = async () => {
+        try {
+          const response = await appFetch('/api/projects', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+          const result = await response.json();
+          if (!response.ok || !result.success) throw new Error(result.error || 'Could not archive project');
+        } catch (error) { showToast(`Database save failed: ${error.message}`, 'error'); return; }
+        projects = projects.filter(item => item.id !== id);
+        users = users.map(user => ({ ...user, projectIds: (user.projectIds || []).filter(projectId => projectId !== id) }));
+        closeModal('modal-confirm');
+        renderProjectsList();
+        renderUsersList();
+        showToast('Project archived successfully.', 'success');
+      };
+      openModal('modal-confirm');
+    }
+
     function confirmDeleteUser(id) {
       const user = users.find(u => u.id === id);
       if (!user) return;
 
-      document.getElementById('confirm-title').textContent = 'Delete User';
+      document.getElementById('confirm-title').textContent = 'Remove User';
       document.getElementById('confirm-msg').textContent = `Are you sure you want to remove ${user.name} (${user.email})?`;
 
       const confirmBtn = document.getElementById('btn-confirm-action');
       confirmBtn.onclick = async () => {
-        const previousUsers = users;
-        users = users.filter(u => u.id !== id);
         try {
-          await saveUsersToDatabase();
+          const response = await appFetch('/api/users', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+          const result = await response.json();
+          if (!response.ok || !result.success) throw new Error(result.error || 'Could not remove user');
         } catch (error) {
-          users = previousUsers;
           showToast(`Database save failed: ${error.message}`, 'error');
           return;
         }
+        users = users.filter(u => u.id !== id);
         closeModal('modal-confirm');
-        showToast('User removed successfully', 'success');
+        showToast('User removed from active access', 'success');
         renderUsersList();
       };
 
