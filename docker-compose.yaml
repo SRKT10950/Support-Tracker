@@ -4,8 +4,8 @@ services:
       context: .
       args:
         PORT: ${PORT:-9010}
-    expose:
-      - "${PORT:-9010}"
+    ports:
+      - "${HOST_PORT:-9010}:${PORT:-9010}"
     environment:
       PORT: ${PORT:-9010}
       DB_API_KEY: ${DB_API_KEY:?Set DB_API_KEY in the deployment environment}
