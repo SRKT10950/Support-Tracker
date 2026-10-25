@@ -262,11 +262,8 @@
     .badge-deployed { background: var(--success-light); color: var(--success); }
     .badge-deployed::before { background: var(--success); }
 
-    .badge-closed { background: var(--gray-100); color: var(--gray-600); }
-    .badge-closed::before { background: var(--gray-400); }
-
-    .badge-blocked { background: var(--danger-light); color: var(--danger); }
-    .badge-blocked::before { background: var(--danger); }
+    .badge-rejected { background: var(--danger-light); color: var(--danger); }
+    .badge-rejected::before { background: var(--danger); }
 
     /* SFDC Badges */
     .badge-sfdc-open { background: #fef08a; color: #854d0e; }
@@ -1217,8 +1214,8 @@
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
             </div>
             <div class="stat-info">
-              <span class="stat-value" id="stat-blocked">0</span>
-              <span class="stat-label">Blocked</span>
+              <span class="stat-value" id="stat-rejected">0</span>
+              <span class="stat-label">Rejected</span>
             </div>
           </div>
 
@@ -1262,8 +1259,7 @@
               <option value="In Review">In Review</option>
               <option value="Testing">Testing</option>
               <option value="Deployed">Deployed</option>
-              <option value="Closed">Closed</option>
-              <option value="Blocked">Blocked</option>
+              <option value="Rejected">Rejected</option>
             </select>
 
             <select id="filter-type" class="filter-select" onchange="renderTable()">
@@ -1475,8 +1471,7 @@
                 <option value="In Review">In Review</option>
                 <option value="Testing">Testing</option>
                 <option value="Deployed">Deployed</option>
-                <option value="Closed">Closed</option>
-                <option value="Blocked">Blocked</option>
+                <option value="Rejected">Rejected</option>
               </select>
             </div>
 
@@ -1816,7 +1811,7 @@
 
     function isOverdue(expectedDate, status) {
       if (!expectedDate) return false;
-      if (status === 'Deployed' || status === 'Closed') return false;
+      if (status === 'Deployed' || status === 'Rejected') return false;
       const today = toLocalISODate();
       return expectedDate < today;
     }
@@ -2068,11 +2063,11 @@
       document.getElementById('dashboard-period-label').textContent = `${periodLabel} · ${selected.length} requests`;
 
       const activeStatuses = ['Open','In Progress','In Review','Testing'];
-      const ongoingStatuses = [...activeStatuses, 'Blocked'];
+      const ongoingStatuses = [...activeStatuses];
       const activeCount = selected.filter(record => activeStatuses.includes(record.status)).length;
       const ongoingCount = selected.filter(record => ongoingStatuses.includes(record.status)).length;
       const deployedCount = selected.filter(record => record.status === 'Deployed').length;
-      const blockedCount = selected.filter(record => record.status === 'Blocked').length;
+      const rejectedCount = selected.filter(record => record.status === 'Rejected').length;
       const overdueCount = selected.filter(record => isOverdue(record.expectedProdDate, record.status)).length;
       const today = new Date(); today.setHours(0,0,0,0);
       const dueSoonCount = selected.filter(record => {
@@ -2081,13 +2076,13 @@
         const remainingDays = Math.ceil((due - today) / 86400000);
         return remainingDays >= 0 && remainingDays <= 7;
       }).length;
-      const completedForSla = selected.filter(record => ['Deployed','Closed'].includes(record.status) && record.expectedProdDate && record.prodDeployDate);
+      const completedForSla = selected.filter(record => record.status === 'Deployed' && record.expectedProdDate && record.prodDeployDate);
       const onTimeCount = completedForSla.filter(record => record.prodDeployDate <= record.expectedProdDate).length;
       const slaRate = completedForSla.length ? `${Math.round(onTimeCount / completedForSla.length * 100)}%` : '—';
-      const metrics = [['Requests',selected.length],['Ongoing',ongoingCount],['Active',activeCount],['Deployed',deployedCount],['Blocked',blockedCount],['Overdue',overdueCount],['Due in 7 days',dueSoonCount],['SLA on time',slaRate]];
+      const metrics = [['Requests',selected.length],['Ongoing',ongoingCount],['Active',activeCount],['Deployed',deployedCount],['Rejected',rejectedCount],['Overdue',overdueCount],['Due in 7 days',dueSoonCount],['SLA on time',slaRate]];
       document.getElementById('dashboard-metrics').innerHTML = metrics.map(([label,value]) => `<div class="dashboard-metric"><strong>${value}</strong><span>${label}</span></div>`).join('');
 
-      const statuses = [...new Set(['Open','In Progress','In Review','Testing','Deployed','Closed','Blocked', ...selected.map(record => record.status).filter(Boolean)])];
+      const statuses = [...new Set(['Open','In Progress','In Review','Testing','Deployed','Rejected', ...selected.map(record => record.status).filter(Boolean)])];
       const statusCounts = statuses.map(status => [status, selected.filter(record => record.status === status).length]);
       const maxStatus = Math.max(1, ...statusCounts.map(([,count]) => count));
       document.getElementById('dashboard-status').innerHTML = statusCounts.map(([status,count]) => `<div class="status-row"><span>${escapeHTML(status)}</span><div class="status-track"><div class="status-fill" style="width:${count/maxStatus*100}%"></div></div><strong>${count}</strong></div>`).join('');
@@ -2119,7 +2114,7 @@
       const grouped = new Map();
       inPeriod.forEach(record => { const name = String(record.developer || 'Unassigned').trim() || 'Unassigned'; if (!selectedDeveloper || name === selectedDeveloper) grouped.set(name, [...(grouped.get(name) || []), record]); });
       const rows = [...grouped.entries()].sort((a,b) => b[1].length-a[1].length || a[0].localeCompare(b[0]));
-      document.getElementById('dashboard-developers').innerHTML = rows.length ? `<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Developer</th><th>Total</th><th>Active</th><th>Blocked</th><th>Overdue</th><th>Deployed</th></tr></thead><tbody>${rows.map(([name,items]) => `<tr><td>${escapeHTML(name)}</td><td>${items.length}</td><td>${items.filter(r=>['Open','In Progress','In Review','Testing'].includes(r.status)).length}</td><td>${items.filter(r=>r.status==='Blocked').length}</td><td>${items.filter(r=>isOverdue(r.expectedProdDate,r.status)).length}</td><td>${items.filter(r=>r.status==='Deployed').length}</td></tr>`).join('')}</tbody></table></div>` : '<p style="color:var(--gray-500);padding:.75rem 0">No requests for this selection.</p>';
+      document.getElementById('dashboard-developers').innerHTML = rows.length ? `<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Developer</th><th>Total</th><th>Active</th><th>Rejected</th><th>Overdue</th><th>Deployed</th></tr></thead><tbody>${rows.map(([name,items]) => `<tr><td>${escapeHTML(name)}</td><td>${items.length}</td><td>${items.filter(r=>['Open','In Progress','In Review','Testing'].includes(r.status)).length}</td><td>${items.filter(r=>r.status==='Rejected').length}</td><td>${items.filter(r=>isOverdue(r.expectedProdDate,r.status)).length}</td><td>${items.filter(r=>r.status==='Deployed').length}</td></tr>`).join('')}</tbody></table></div>` : '<p style="color:var(--gray-500);padding:.75rem 0">No requests for this selection.</p>';
     }
 
     /* ── Search & Filter Logic ── */
@@ -2207,7 +2202,7 @@
     function updateStats() {
       let active = 0;
       let deployed = 0;
-      let blocked = 0;
+      let rejected = 0;
       let overdue = 0;
 
       records.forEach(r => {
@@ -2215,14 +2210,14 @@
           active++;
         }
         if (r.status === 'Deployed') deployed++;
-        if (r.status === 'Blocked') blocked++;
+        if (r.status === 'Rejected') rejected++;
         if (isOverdue(r.expectedProdDate, r.status)) overdue++;
       });
 
       document.getElementById('stat-total').textContent = records.length;
       document.getElementById('stat-active').textContent = active;
       document.getElementById('stat-deployed').textContent = deployed;
-      document.getElementById('stat-blocked').textContent = blocked;
+      document.getElementById('stat-rejected').textContent = rejected;
       document.getElementById('stat-overdue').textContent = overdue;
     }
 

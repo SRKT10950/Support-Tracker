@@ -207,6 +207,13 @@ function resultRows(result) {
   return [];
 }
 
+function normalizeTrackerStatus(status) {
+  const value = String(status || '').trim();
+  if (value.toLowerCase() === 'closed' || value.toLowerCase() === 'deployed') return 'Deployed';
+  if (value.toLowerCase() === 'blocked' || value.toLowerCase() === 'rejected') return 'Rejected';
+  return value;
+}
+
 // Initialization-free, idempotent upserts used by both migration and normal state saves.
 async function writeRelationalState(state, previousState = null) {
   const sameFields = (left, right, fields) => Boolean(left && right) && fields.every((field) => (left[field] ?? null) === (right[field] ?? null));
@@ -235,8 +242,9 @@ async function writeRelationalState(state, previousState = null) {
     }
   }
   for (const record of (Array.isArray(state.records) ? state.records : [])) {
-    if (previousState && sameFields(record, previousRecords.get(record.id), ['projectId', 'trackerNo', 'department', 'subject', 'requestType', 'developer', 'status', 'owner', 'expectedProdDate', 'prodDeployDate', 'businessApprovalDate', 'releasePR', 'createdDate', 'updatedAt', 'sfdcStatus'])) continue;
-    await databaseQuery('INSERT INTO support_tracker_records (record_id, project_id, tracker_no, department, subject, request_type, developer, status, owner, expected_prod_date, prod_deploy_date, business_approval_date, release_pr, created_date, updated_at, sfdc_status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) ON CONFLICT (record_id) DO UPDATE SET project_id = EXCLUDED.project_id, tracker_no = EXCLUDED.tracker_no, department = EXCLUDED.department, subject = EXCLUDED.subject, request_type = EXCLUDED.request_type, developer = EXCLUDED.developer, status = EXCLUDED.status, owner = EXCLUDED.owner, expected_prod_date = EXCLUDED.expected_prod_date, prod_deploy_date = EXCLUDED.prod_deploy_date, business_approval_date = EXCLUDED.business_approval_date, release_pr = EXCLUDED.release_pr, created_date = EXCLUDED.created_date, updated_at = EXCLUDED.updated_at, sfdc_status = EXCLUDED.sfdc_status', [record.id, record.projectId || null, record.trackerNo, record.department, record.subject, record.requestType, record.developer, record.status, record.owner || null, record.expectedProdDate || null, record.prodDeployDate || null, record.businessApprovalDate || null, record.releasePR || null, record.createdDate || null, record.updatedAt || null, record.sfdcStatus || null]);
+    const normalizedRecord = { ...record, status: normalizeTrackerStatus(record.status) };
+    if (previousState && sameFields(normalizedRecord, previousRecords.get(record.id), ['projectId', 'trackerNo', 'department', 'subject', 'requestType', 'developer', 'status', 'owner', 'expectedProdDate', 'prodDeployDate', 'businessApprovalDate', 'releasePR', 'createdDate', 'updatedAt', 'sfdcStatus'])) continue;
+    await databaseQuery('INSERT INTO support_tracker_records (record_id, project_id, tracker_no, department, subject, request_type, developer, status, owner, expected_prod_date, prod_deploy_date, business_approval_date, release_pr, created_date, updated_at, sfdc_status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) ON CONFLICT (record_id) DO UPDATE SET project_id = EXCLUDED.project_id, tracker_no = EXCLUDED.tracker_no, department = EXCLUDED.department, subject = EXCLUDED.subject, request_type = EXCLUDED.request_type, developer = EXCLUDED.developer, status = EXCLUDED.status, owner = EXCLUDED.owner, expected_prod_date = EXCLUDED.expected_prod_date, prod_deploy_date = EXCLUDED.prod_deploy_date, business_approval_date = EXCLUDED.business_approval_date, release_pr = EXCLUDED.release_pr, created_date = EXCLUDED.created_date, updated_at = EXCLUDED.updated_at, sfdc_status = EXCLUDED.sfdc_status', [record.id, record.projectId || null, record.trackerNo, record.department, record.subject, record.requestType, record.developer, normalizedRecord.status, record.owner || null, record.expectedProdDate || null, record.prodDeployDate || null, record.businessApprovalDate || null, record.releasePR || null, record.createdDate || null, record.updatedAt || null, record.sfdcStatus || null]);
   }
 }
 
@@ -288,6 +296,12 @@ async function ensureStateTable() {
         await writeRelationalState(legacyState);
         await databaseQuery('INSERT INTO support_tracker_app_metadata (metadata_key, metadata_value) VALUES ($1, $2) ON CONFLICT (metadata_key) DO UPDATE SET metadata_value = EXCLUDED.metadata_value', ['needs_migration', String(Boolean(legacyState.needsMigration))]);
       }
+      const statusMigrationRow = resultRows(await databaseQuery('SELECT metadata_value FROM support_tracker_app_metadata WHERE metadata_key = $1', ['tracker_statuses_v2']))[0];
+      if (!statusMigrationRow) {
+        await databaseQuery('UPDATE support_tracker_records SET status = $1 WHERE status = $2', ['Deployed', 'Closed']);
+        await databaseQuery('UPDATE support_tracker_records SET status = $1 WHERE status = $2', ['Rejected', 'Blocked']);
+        await databaseQuery('INSERT INTO support_tracker_app_metadata (metadata_key, metadata_value) VALUES ($1, $2) ON CONFLICT (metadata_key) DO NOTHING', ['tracker_statuses_v2', 'true']);
+      }
       const configuredAdmin = resultRows(await databaseQuery('SELECT user_id FROM support_tracker_users WHERE LOWER(email) = $1', [initialAdmin.email]))[0];
       if (!configuredAdmin) {
         await databaseQuery('INSERT INTO support_tracker_users (user_id, name, email, role, password_hash) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (email) DO NOTHING', [initialAdmin.id, initialAdmin.name, initialAdmin.email, initialAdmin.role, initialAdmin.passwordHash]);
@@ -323,7 +337,7 @@ async function readAppState() {
   const projects = resultRows(projectsResult).map((row) => ({ id: value(row, 'project_id'), name: value(row, 'name'), type: value(row, 'project_type'), startDate: date(value(row, 'start_date')), endDate: date(value(row, 'end_date')) }));
   const records = resultRows(recordsResult).map((row) => ({
     id: value(row, 'record_id'), projectId: value(row, 'project_id') || '', trackerNo: value(row, 'tracker_no'), department: value(row, 'department'), subject: value(row, 'subject'),
-    requestType: value(row, 'request_type'), developer: value(row, 'developer'), status: value(row, 'status'), owner: value(row, 'owner') || '',
+    requestType: value(row, 'request_type'), developer: value(row, 'developer'), status: normalizeTrackerStatus(value(row, 'status')), owner: value(row, 'owner') || '',
     expectedProdDate: date(value(row, 'expected_prod_date')), prodDeployDate: date(value(row, 'prod_deploy_date')),
     businessApprovalDate: date(value(row, 'business_approval_date')), releasePR: value(row, 'release_pr') || '',
     createdDate: date(value(row, 'created_date')), updatedAt: date(value(row, 'updated_at')), sfdcStatus: value(row, 'sfdc_status') || '',
@@ -664,6 +678,7 @@ const server = http.createServer((req, res) => requestContext.run(databaseDevice
 
       const state = await readJsonBody(req);
       if (!state || !Array.isArray(state.records)) return sendJson(res, 400, { success: false, error: 'State must contain a records array' });
+      state.records = state.records.map((record) => record && typeof record === 'object' ? { ...record, status: normalizeTrackerStatus(record.status) } : record);
       if (user.role !== 'admin' && user.role !== 'developer') return sendJson(res, 403, { success: false, error: 'Your account cannot update tracker data' });
 
       const currentState = await readAppState();
