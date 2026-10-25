@@ -208,15 +208,34 @@ function resultRows(result) {
 }
 
 // Initialization-free, idempotent upserts used by both migration and normal state saves.
-async function writeRelationalState(state) {
+async function writeRelationalState(state, previousState = null) {
+  const sameFields = (left, right, fields) => Boolean(left && right) && fields.every((field) => (left[field] ?? null) === (right[field] ?? null));
+  const previousProjects = new Map((previousState?.projects || []).map((project) => [project.id, project]));
+  const previousUsers = new Map((previousState?.users || []).map((user) => [user.id, user]));
+  const previousRecords = new Map((previousState?.records || []).map((record) => [record.id, record]));
   for (const project of (Array.isArray(state.projects) ? state.projects : [])) {
+    if (previousState && sameFields(project, previousProjects.get(project.id), ['name', 'type', 'startDate', 'endDate'])) continue;
     await databaseQuery('INSERT INTO support_tracker_projects (project_id, name, project_type, start_date, end_date) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (project_id) DO UPDATE SET name = EXCLUDED.name, project_type = EXCLUDED.project_type, start_date = EXCLUDED.start_date, end_date = EXCLUDED.end_date', [project.id, project.name, project.type, project.startDate, project.endDate]);
   }
   for (const user of (Array.isArray(state.users) ? state.users : [])) {
-    await databaseQuery('INSERT INTO support_tracker_users (user_id, name, email, role, password_hash) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (user_id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, role = EXCLUDED.role, password_hash = EXCLUDED.password_hash', [user.id, user.name, user.email, user.role, user.passwordHash]);
-    for (const projectId of (user.projectIds || [])) await databaseQuery('INSERT INTO support_tracker_user_projects (user_id, project_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [user.id, projectId]);
+    const previousUser = previousUsers.get(user.id);
+    const assignmentsChanged = previousState && JSON.stringify([...(user.projectIds || [])].sort()) !== JSON.stringify([...(previousUser?.projectIds || [])].sort());
+    const userChanged = !previousState || !sameFields(user, previousUser, ['name', 'email', 'role', 'passwordHash']);
+    if (!userChanged && !assignmentsChanged) continue;
+    if (userChanged) {
+      await databaseQuery('INSERT INTO support_tracker_users (user_id, name, email, role, password_hash) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (user_id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, role = EXCLUDED.role, password_hash = EXCLUDED.password_hash', [user.id, user.name, user.email, user.role, user.passwordHash]);
+    }
+    if (assignmentsChanged) {
+      for (const projectId of (previousUser?.projectIds || [])) if (!(user.projectIds || []).includes(projectId)) await databaseQuery('DELETE FROM support_tracker_user_projects WHERE user_id = $1 AND project_id = $2', [user.id, projectId]);
+    }
+    for (const projectId of (user.projectIds || [])) {
+      if (assignmentsChanged && (previousUser?.projectIds || []).includes(projectId)) continue;
+      if (previousState && !assignmentsChanged && previousUser) continue;
+      await databaseQuery('INSERT INTO support_tracker_user_projects (user_id, project_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [user.id, projectId]);
+    }
   }
   for (const record of (Array.isArray(state.records) ? state.records : [])) {
+    if (previousState && sameFields(record, previousRecords.get(record.id), ['projectId', 'trackerNo', 'department', 'subject', 'requestType', 'developer', 'status', 'owner', 'expectedProdDate', 'prodDeployDate', 'businessApprovalDate', 'releasePR', 'createdDate', 'updatedAt', 'sfdcStatus'])) continue;
     await databaseQuery('INSERT INTO support_tracker_records (record_id, project_id, tracker_no, department, subject, request_type, developer, status, owner, expected_prod_date, prod_deploy_date, business_approval_date, release_pr, created_date, updated_at, sfdc_status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) ON CONFLICT (record_id) DO UPDATE SET project_id = EXCLUDED.project_id, tracker_no = EXCLUDED.tracker_no, department = EXCLUDED.department, subject = EXCLUDED.subject, request_type = EXCLUDED.request_type, developer = EXCLUDED.developer, status = EXCLUDED.status, owner = EXCLUDED.owner, expected_prod_date = EXCLUDED.expected_prod_date, prod_deploy_date = EXCLUDED.prod_deploy_date, business_approval_date = EXCLUDED.business_approval_date, release_pr = EXCLUDED.release_pr, created_date = EXCLUDED.created_date, updated_at = EXCLUDED.updated_at, sfdc_status = EXCLUDED.sfdc_status', [record.id, record.projectId || null, record.trackerNo, record.department, record.subject, record.requestType, record.developer, record.status, record.owner || null, record.expectedProdDate || null, record.prodDeployDate || null, record.businessApprovalDate || null, record.releasePR || null, record.createdDate || null, record.updatedAt || null, record.sfdcStatus || null]);
   }
 }
@@ -313,10 +332,12 @@ async function readAppState() {
   return { users, records, projects, needsMigration: String(value(migration || {}, 'metadata_value')) === 'true' };
 }
 
-async function writeAppState(state) {
+async function writeAppState(state, previousState = null) {
   await ensureStateTable();
-  await writeRelationalState(state);
-  await databaseQuery('INSERT INTO support_tracker_app_metadata (metadata_key, metadata_value) VALUES ($1, $2) ON CONFLICT (metadata_key) DO UPDATE SET metadata_value = EXCLUDED.metadata_value', ['needs_migration', String(Boolean(state.needsMigration))]);
+  await writeRelationalState(state, previousState);
+  if (!previousState || Boolean(state.needsMigration) !== Boolean(previousState.needsMigration)) {
+    await databaseQuery('INSERT INTO support_tracker_app_metadata (metadata_key, metadata_value) VALUES ($1, $2) ON CONFLICT (metadata_key) DO UPDATE SET metadata_value = EXCLUDED.metadata_value', ['needs_migration', String(Boolean(state.needsMigration))]);
+  }
 }
 
 async function authenticatedUser(req) {
@@ -462,8 +483,9 @@ const server = http.createServer((req, res) => requestContext.run(databaseDevice
       const verification = user ? await verifyPassword(password, user.passwordHash) : { valid: false };
       if (!user || !verification.valid) return sendJson(res, 401, { success: false, error: 'Invalid email or password' });
       if (verification.legacy) {
+        const previousState = structuredClone(state);
         user.passwordHash = await hashPassword(password);
-        await writeAppState(state);
+        await writeAppState(state, previousState);
       }
       const token = await createServerSession(user.id);
       setSessionCookie(req, res, token, SESSION_TTL_SECONDS);
@@ -510,10 +532,11 @@ const server = http.createServer((req, res) => requestContext.run(databaseDevice
       if (state.users.some((candidate) => candidate.email.toLowerCase() === email)) {
         return sendJson(res, 409, { success: false, error: 'A user with this email already exists' });
       }
+      const previousState = structuredClone(state);
       const projectIds = normalizeProjectIds(body.projectIds, state.projects || []);
       const savedUser = { id: `usr-${crypto.randomUUID()}`, name, email, role, projectIds, passwordHash: await hashPassword(password) };
       state.users.push(savedUser);
-      await writeAppState(state);
+      await writeAppState(state, previousState);
       return sendJson(res, 201, { success: true, user: publicUser(savedUser) });
     } catch (error) {
       return sendJson(res, error.statusCode || 502, { success: false, error: error.message || 'Could not create user' });
@@ -541,15 +564,13 @@ const server = http.createServer((req, res) => requestContext.run(databaseDevice
         return sendJson(res, 409, { success: false, error: 'A user with this email already exists' });
       }
       const projectIds = normalizeProjectIds(body.projectIds, state.projects || []);
-      for (const oldProjectId of (target.projectIds || [])) {
-        if (!projectIds.includes(oldProjectId)) await databaseQuery('DELETE FROM support_tracker_user_projects WHERE user_id = $1 AND project_id = $2', [target.id, oldProjectId]);
-      }
+      const previousState = structuredClone(state);
       target.name = name;
       target.email = email;
       target.role = role;
       target.projectIds = projectIds;
       if (password) target.passwordHash = await hashPassword(password);
-      await writeAppState(state);
+      await writeAppState(state, previousState);
       return sendJson(res, 200, { success: true, user: publicUser(target) });
     } catch (error) {
       return sendJson(res, error.statusCode || 502, { success: false, error: error.message || 'Could not update password' });
@@ -680,7 +701,7 @@ const server = http.createServer((req, res) => requestContext.run(databaseDevice
         records.push(...state.records.filter((record) => !knownIds.has(record.id)));
       }
       const nextState = { users, records, projects, needsMigration: false };
-      await writeAppState(nextState);
+      await writeAppState(nextState, currentState);
       return sendJson(res, 200, { success: true, users: user.role === 'admin' ? users.map(publicUser) : [], records: user.role === 'admin' ? nextState.records : state.records, projects: user.role === 'admin' ? nextState.projects : state.projects });
     } catch (error) {
       return sendJson(res, error.statusCode || 502, { success: false, error: error.message || 'Database request failed' });

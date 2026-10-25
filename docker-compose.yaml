@@ -16,7 +16,7 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-false}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:' + process.env.PORT + '/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
-      interval: 30s
+      interval: 24h
       timeout: 5s
       retries: 3
       start_period: 10s

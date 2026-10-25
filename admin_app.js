@@ -64,7 +64,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   setupTabs();
   loadAll();
-  setInterval(loadOverview, 4000);
+  // Keep the background database health/status check to one call per 24 hours.
+  setInterval(loadOverview, 24 * 60 * 60 * 1000);
 });
 
 // Fetch wrapper with authentication headers
