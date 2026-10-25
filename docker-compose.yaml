@@ -10,10 +10,6 @@ services:
       PORT: ${PORT:-9010}
       DB_API_KEY: ${DB_API_KEY:?Set DB_API_KEY in the deployment environment}
       DB_DEVICE_SECURITY_KEY: ${DB_DEVICE_SECURITY_KEY:?Set DB_DEVICE_SECURITY_KEY in the deployment environment}
-      DB_CLIENT_IP: ${DB_CLIENT_IP:?Set DB_CLIENT_IP to this server's public egress IP}
-      DB_DEVICE_NAME: ${DB_DEVICE_NAME:-SRKT-Laptop}
-      DB_LOCATION: ${DB_LOCATION:?Set DB_LOCATION to the server or deployment location}
-      DB_DEVICE_TYPE: ${DB_DEVICE_TYPE:-Desktop}
       DB_APP_NAME: ${DB_APP_NAME:-Support Tracker}
       INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:?Set INITIAL_ADMIN_EMAIL in the deployment environment}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:?Set INITIAL_ADMIN_PASSWORD in the deployment environment}

@@ -4,6 +4,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { promisify } = require('node:util');
 const net = require('node:net');
+const { AsyncLocalStorage } = require('node:async_hooks');
 
 const scrypt = promisify(crypto.scrypt);
 
@@ -12,10 +13,6 @@ const ROOT = __dirname;
 const required = [
   'DB_API_KEY',
   'DB_DEVICE_SECURITY_KEY',
-  'DB_CLIENT_IP',
-  'DB_DEVICE_NAME',
-  'DB_LOCATION',
-  'DB_DEVICE_TYPE',
   'DB_APP_NAME',
   'INITIAL_ADMIN_EMAIL',
   'INITIAL_ADMIN_PASSWORD',
@@ -26,14 +23,13 @@ const DEVICE_COOKIE = 'support_tracker_device';
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
 const DEVICE_TTL_SECONDS = 365 * 24 * 60 * 60;
 let stateTableReady;
+const requestContext = new AsyncLocalStorage();
 
 function configError() {
   const missing = required.filter((name) => !process.env[name]);
   if (process.env.INITIAL_ADMIN_PASSWORD && process.env.INITIAL_ADMIN_PASSWORD.length < 12) {
     missing.push('INITIAL_ADMIN_PASSWORD (must be at least 12 characters)');
   }
-  if (process.env.DB_CLIENT_IP && !net.isIP(process.env.DB_CLIENT_IP)) missing.push('DB_CLIENT_IP (must be the public egress IP address)');
-  if (process.env.DB_LOCATION && /^set\s+db_location/i.test(process.env.DB_LOCATION.trim())) missing.push('DB_LOCATION (replace the placeholder with the deployment location)');
   if (process.env.INITIAL_ADMIN_EMAIL && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(process.env.INITIAL_ADMIN_EMAIL.trim())) missing.push('INITIAL_ADMIN_EMAIL (must be a valid email address)');
   return missing;
 }
@@ -125,6 +121,23 @@ function requestOrigin(req, deviceId) {
   };
 }
 
+function databaseDeviceMetadata(req) {
+  const peerIp = req.socket.remoteAddress || '';
+  const forwardedFor = String(req.headers['x-forwarded-for'] || '').slice(0, 500);
+  const forwardedCandidate = forwardedFor.split(',')[0].trim();
+  const clientIp = String(process.env.TRUST_PROXY || '').toLowerCase() === 'true' && net.isIP(forwardedCandidate)
+    ? forwardedCandidate
+    : peerIp;
+  const platform = String(req.headers['x-client-platform'] || '').trim().slice(0, 200);
+  const timezone = String(req.headers['x-client-timezone'] || '').trim().slice(0, 100);
+  return {
+    clientIp: clientIp.replace(/^::ffff:/, '').slice(0, 100) || 'unknown',
+    deviceName: platform ? `${platform} device` : 'Unknown device',
+    location: timezone || 'unknown',
+    deviceType: clientDeviceType(req),
+  };
+}
+
 async function recordRequestAudit(origin, statusCode) {
   await databaseQuery(
     'INSERT INTO support_tracker_request_audit (event_id, method, path, status_code, client_ip, peer_ip, forwarded_for, device_id, device_type, platform, timezone, user_agent, session_hash, actor_user_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, (SELECT user_id FROM support_tracker_sessions WHERE token_hash = $13 AND expires_at > NOW()))',
@@ -155,15 +168,16 @@ async function databaseQuery(query, params) {
   const missing = configError();
   if (missing.length) throw Object.assign(new Error(`Database proxy is not configured: ${missing.join(', ')}`), { statusCode: 503 });
 
+  const device = requestContext.getStore() || { clientIp: 'unknown', deviceName: 'Unknown device', location: 'unknown', deviceType: 'other' };
   const upstream = await fetch(DB_QUERY_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Key: process.env.DB_API_KEY,
-      IP: process.env.DB_CLIENT_IP,
-      DeviceName: process.env.DB_DEVICE_NAME,
-      Location: process.env.DB_LOCATION,
-      DeviceType: process.env.DB_DEVICE_TYPE,
+      IP: device.clientIp,
+      DeviceName: device.deviceName,
+      Location: device.location,
+      DeviceType: device.deviceType,
       AppName: process.env.DB_APP_NAME,
       'Device-Security-Key': process.env.DB_DEVICE_SECURITY_KEY,
     },
@@ -353,7 +367,7 @@ async function normalizeAdminUsers(incomingUsers, currentState) {
   return normalized;
 }
 
-const server = http.createServer(async (req, res) => {
+const server = http.createServer((req, res) => requestContext.run(databaseDeviceMetadata(req), async () => {
   const requestPath = new URL(req.url, 'http://localhost').pathname;
   const isAppApiRequest = requestPath.startsWith('/api/') && requestPath !== '/api/health';
   let deviceId = cookieValue(req, DEVICE_COOKIE);
@@ -531,6 +545,6 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'HEAD') return res.end();
     res.end(data);
   });
-});
+}));
 
 server.listen(PORT, '0.0.0.0', () => console.log(`Support Tracker listening on ${PORT}`));
