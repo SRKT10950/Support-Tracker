@@ -1576,7 +1576,6 @@
     /* ── Legacy migration and browser session keys ── */
     const STORAGE_KEY_USERS = 'dt_users_v2';
     const STORAGE_KEY_RECORDS = 'dt_records_v2';
-    const STORAGE_KEY_SESSION = 'dt_session_v2';
 
     /* ── Application State ── */
     let currentUser = null;
@@ -1594,16 +1593,6 @@
     let sortDirection = 'asc';
     let currentPage = 1;
     let pageSize = 25;
-
-    /* ── Helper: SHA-256 Hashing ── */
-    async function hashPassword(plainText) {
-      if (!plainText) return '';
-      const encoder = new TextEncoder();
-      const data = encoder.encode(plainText);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    }
 
     /* ── Helper: Escape HTML ── */
     function escapeHTML(str) {
@@ -1638,116 +1627,9 @@
       return expectedDate < today;
     }
 
-    /* ── Seed Initial Data ── */
+    /* ── Load only legacy local data for the one-time database migration ── */
     async function initializeDatabase() {
-      // Seed default admin user if absent
-      const storedUsers = localStorage.getItem(STORAGE_KEY_USERS);
-      if (!storedUsers) {
-        const defaultAdminHash = await hashPassword('admin123');
-        const initialUsers = [
-          {
-            id: 'usr-admin-1',
-            name: 'Administrator',
-            email: 'admin@company.com',
-            passwordHash: defaultAdminHash,
-            role: 'admin'
-          },
-          {
-            id: 'usr-dev-1',
-            name: 'Sarah Connor',
-            email: 'sarah@company.com',
-            passwordHash: await hashPassword('dev123'),
-            role: 'developer'
-          }
-        ];
-        localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(initialUsers));
-      }
-
-      // Seed sample records if absent
-      const storedRecords = localStorage.getItem(STORAGE_KEY_RECORDS);
-      if (!storedRecords) {
-        const today = new Date();
-        const yyyy = today.getFullYear();
-        const mm = String(today.getMonth() + 1).padStart(2, '0');
-        const dd = String(today.getDate()).padStart(2, '0');
-        const todayStr = `${yyyy}-${mm}-${dd}`;
-        
-        // Overdue date
-        const pastDate = new Date(Date.now() - 5 * 86400000).toISOString().split('T')[0];
-        // Future date
-        const futureDate = new Date(Date.now() + 12 * 86400000).toISOString().split('T')[0];
-
-        const initialRecords = [
-          {
-            id: 'rec-1',
-            trackerNo: 'TRK-2026-001',
-            department: 'Billing',
-            subject: 'Automated Invoice reconciliation webhook integration',
-            requestType: 'Enhancement',
-            developer: 'Sarah Connor',
-            status: 'In Progress',
-            expectedProdDate: pastDate, // Overdue item
-            prodDeployDate: '',
-            businessApprovalDate: todayStr,
-            releasePR: 'https://github.com/company/repo/pull/402',
-            createdDate: todayStr,
-            owner: 'David Miller',
-            sfdcStatus: 'Open'
-          },
-          {
-            id: 'rec-2',
-            trackerNo: 'TRK-2026-002',
-            department: 'Customer Success',
-            subject: 'SSO Okta SAML certificate rotation update',
-            requestType: 'Maintenance',
-            developer: 'Alex Rivera',
-            status: 'Testing',
-            expectedProdDate: futureDate,
-            prodDeployDate: '',
-            businessApprovalDate: todayStr,
-            releasePR: 'PR #415',
-            createdDate: todayStr,
-            owner: 'Rachel Green',
-            sfdcStatus: 'Pending'
-          },
-          {
-            id: 'rec-3',
-            trackerNo: 'TRK-2026-003',
-            department: 'Security',
-            subject: 'Role-based API rate limiting and token revocation',
-            requestType: 'New Feature',
-            developer: 'Sarah Connor',
-            status: 'Deployed',
-            expectedProdDate: pastDate,
-            prodDeployDate: todayStr,
-            businessApprovalDate: todayStr,
-            releasePR: 'https://github.com/company/repo/pull/390',
-            createdDate: pastDate,
-            owner: 'Security Lead',
-            sfdcStatus: 'Closed'
-          },
-          {
-            id: 'rec-4',
-            trackerNo: 'TRK-2026-004',
-            department: 'Logistics',
-            subject: 'Fix dispatch shipment barcode label distortion bug',
-            requestType: 'Bug Fix',
-            developer: 'Mark Jensen',
-            status: 'Blocked',
-            expectedProdDate: '',
-            prodDeployDate: '',
-            businessApprovalDate: '',
-            releasePR: '',
-            createdDate: todayStr,
-            owner: 'Operations Team',
-            sfdcStatus: 'Open'
-          }
-        ];
-        localStorage.setItem(STORAGE_KEY_RECORDS, JSON.stringify(initialRecords));
-      }
-
       loadLegacyStateFromStorage();
-      await loadApplicationState();
     }
 
     function loadLegacyStateFromStorage() {
@@ -1766,16 +1648,26 @@
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error || 'Could not load PostgreSQL data');
 
-      if (result.state) {
-        users = Array.isArray(result.state.users) ? result.state.users : [];
-        records = Array.isArray(result.state.records) ? result.state.records : [];
-      } else {
+      const remoteState = result.state || { users: [], records: [], needsMigration: false };
+      if (remoteState.needsMigration && currentUser && currentUser.role === 'admin') {
+        const mergedUsers = Array.isArray(remoteState.users) ? [...remoteState.users] : [];
+        for (const legacyUser of users) {
+          const legacyEmail = String(legacyUser.email || '').toLowerCase();
+          const duplicate = mergedUsers.some(user => user.id === legacyUser.id || String(user.email || '').toLowerCase() === legacyEmail);
+          if (!duplicate) mergedUsers.push(legacyUser);
+        }
+        users = mergedUsers;
+        records = remoteState.records && remoteState.records.length ? remoteState.records : records;
         await persistApplicationState();
+      } else {
+        users = Array.isArray(remoteState.users) ? remoteState.users : [];
+        records = Array.isArray(remoteState.records) ? remoteState.records : [];
       }
 
-      // Keep the browser session only. App data is now owned by PostgreSQL.
+      // Remove data left by the old browser-only implementation after migration.
       localStorage.removeItem(STORAGE_KEY_USERS);
       localStorage.removeItem(STORAGE_KEY_RECORDS);
+      localStorage.removeItem('dt_session_v2');
     }
 
     async function persistApplicationState() {
@@ -1786,6 +1678,9 @@
       });
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error || 'Could not save PostgreSQL data');
+      if (Array.isArray(result.users)) users = result.users;
+      if (Array.isArray(result.records)) records = result.records;
+      if (currentUser) currentUser = users.find(user => user.id === currentUser.id) || currentUser;
       localStorage.removeItem(STORAGE_KEY_USERS);
       localStorage.removeItem(STORAGE_KEY_RECORDS);
     }
@@ -1800,19 +1695,15 @@
 
     /* ── Authentication & Session ── */
     async function checkAuthSession() {
-      const session = localStorage.getItem(STORAGE_KEY_SESSION);
-      if (session) {
-        try {
-          const parsed = JSON.parse(session);
-          const found = users.find(u => u.id === parsed.userId);
-          if (found) {
-            currentUser = found;
-            showAppView();
-            return;
-          }
-        } catch (e) {}
+      const response = await fetch('/api/session', { headers: { Accept: 'application/json' } });
+      if (!response.ok) {
+        showLoginView();
+        return;
       }
-      showLoginView();
+      const result = await response.json();
+      currentUser = result.user;
+      await loadApplicationState();
+      showAppView();
     }
 
     function showLoginView() {
@@ -1859,29 +1750,31 @@
         return;
       }
 
-      const hash = await hashPassword(pass);
-      const user = users.find(u => u.email.toLowerCase() === email && (u.passwordHash === hash || u.password === pass));
-
-      if (user) {
-        // Upgrade legacy plaintext password if present
-        if (!user.passwordHash && user.password) {
-          user.passwordHash = hash;
-          delete user.password;
-          await saveUsersToDatabase();
+      try {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ email, password: pass }),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          alertEl.textContent = result.error || 'Invalid email or password.';
+          alertEl.style.display = 'block';
+          return;
         }
-
-        currentUser = user;
-        localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify({ userId: user.id, loginTime: Date.now() }));
-        showToast(`Welcome back, ${user.name}!`, 'success');
+        currentUser = result.user;
+        await loadApplicationState();
+        document.getElementById('input-password').value = '';
+        showToast(`Welcome back, ${currentUser.name}!`, 'success');
         showAppView();
-      } else {
-        alertEl.textContent = 'Invalid email or password.';
+      } catch (error) {
+        alertEl.textContent = `Database sign-in failed: ${error.message}`;
         alertEl.style.display = 'block';
       }
     });
 
-    function logout() {
-      localStorage.removeItem(STORAGE_KEY_SESSION);
+    async function logout() {
+      try { await fetch('/api/logout', { method: 'POST' }); } catch (e) {}
       currentUser = null;
       showToast('Logged out successfully');
       showLoginView();
@@ -2413,22 +2306,11 @@
         return;
       }
 
-      const previousUsers = users.map(user => ({ ...user }));
-      let successMessage;
+      const isEdit = Boolean(currentEditingUserId);
       if (currentEditingUserId) {
-        const idx = users.findIndex(u => u.id === currentEditingUserId);
-        if (idx !== -1) {
-          users[idx].name = name;
-          users[idx].email = email;
-          users[idx].role = role;
-          if (password) {
-            if (password.length < 6) {
-              showToast('Password must be at least 6 characters.', 'error');
-              return;
-            }
-            users[idx].passwordHash = await hashPassword(password);
-          }
-          successMessage = 'User updated successfully';
+        if (password && password.length < 6) {
+          showToast('Password must be at least 6 characters.', 'error');
+          return;
         }
       } else {
         if (!password || password.length < 6) {
@@ -2436,25 +2318,29 @@
           return;
         }
 
-        const newUser = {
-          id: 'usr-' + Date.now(),
-          name,
-          email,
-          role,
-          passwordHash: await hashPassword(password)
-        };
-        users.push(newUser);
-        successMessage = `User "${name}" created successfully`;
       }
 
       try {
-        await saveUsersToDatabase();
+        const response = await fetch('/api/users', {
+          method: isEdit ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ id: currentEditingUserId, name, email, role, password }),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || 'Could not save user');
+        if (isEdit) {
+          const idx = users.findIndex(u => u.id === currentEditingUserId);
+          if (idx !== -1) users[idx] = result.user;
+        } else {
+          users.push(result.user);
+        }
+        if (currentUser && currentUser.id === result.user.id) currentUser = result.user;
       } catch (error) {
-        users = previousUsers;
         showToast(`Database save failed: ${error.message}`, 'error');
         return;
       }
-      showToast(successMessage, 'success');
+      showToast(isEdit ? 'User updated successfully' : `User "${name}" created successfully`, 'success');
+      document.getElementById('user-password').value = '';
       closeModal('modal-user');
       renderUsersList();
     }
