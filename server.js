@@ -217,7 +217,7 @@ async function writeRelationalState(state) {
     for (const projectId of (user.projectIds || [])) await databaseQuery('INSERT INTO support_tracker_user_projects (user_id, project_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [user.id, projectId]);
   }
   for (const record of (Array.isArray(state.records) ? state.records : [])) {
-    await databaseQuery('INSERT INTO support_tracker_records (record_id, tracker_no, department, subject, request_type, developer, status, owner, expected_prod_date, prod_deploy_date, business_approval_date, release_pr, created_date, updated_at, sfdc_status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) ON CONFLICT (record_id) DO UPDATE SET tracker_no = EXCLUDED.tracker_no, department = EXCLUDED.department, subject = EXCLUDED.subject, request_type = EXCLUDED.request_type, developer = EXCLUDED.developer, status = EXCLUDED.status, owner = EXCLUDED.owner, expected_prod_date = EXCLUDED.expected_prod_date, prod_deploy_date = EXCLUDED.prod_deploy_date, business_approval_date = EXCLUDED.business_approval_date, release_pr = EXCLUDED.release_pr, created_date = EXCLUDED.created_date, updated_at = EXCLUDED.updated_at, sfdc_status = EXCLUDED.sfdc_status', [record.id, record.trackerNo, record.department, record.subject, record.requestType, record.developer, record.status, record.owner || null, record.expectedProdDate || null, record.prodDeployDate || null, record.businessApprovalDate || null, record.releasePR || null, record.createdDate || null, record.updatedAt || null, record.sfdcStatus || null]);
+    await databaseQuery('INSERT INTO support_tracker_records (record_id, project_id, tracker_no, department, subject, request_type, developer, status, owner, expected_prod_date, prod_deploy_date, business_approval_date, release_pr, created_date, updated_at, sfdc_status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) ON CONFLICT (record_id) DO UPDATE SET project_id = EXCLUDED.project_id, tracker_no = EXCLUDED.tracker_no, department = EXCLUDED.department, subject = EXCLUDED.subject, request_type = EXCLUDED.request_type, developer = EXCLUDED.developer, status = EXCLUDED.status, owner = EXCLUDED.owner, expected_prod_date = EXCLUDED.expected_prod_date, prod_deploy_date = EXCLUDED.prod_deploy_date, business_approval_date = EXCLUDED.business_approval_date, release_pr = EXCLUDED.release_pr, created_date = EXCLUDED.created_date, updated_at = EXCLUDED.updated_at, sfdc_status = EXCLUDED.sfdc_status', [record.id, record.projectId || null, record.trackerNo, record.department, record.subject, record.requestType, record.developer, record.status, record.owner || null, record.expectedProdDate || null, record.prodDeployDate || null, record.businessApprovalDate || null, record.releasePR || null, record.createdDate || null, record.updatedAt || null, record.sfdcStatus || null]);
   }
 }
 
@@ -231,7 +231,8 @@ async function ensureStateTable() {
       await databaseQuery('CREATE TABLE IF NOT EXISTS support_tracker_users (user_id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE, role TEXT NOT NULL, password_hash TEXT NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE)', []);
       await databaseQuery('CREATE TABLE IF NOT EXISTS support_tracker_projects (project_id TEXT PRIMARY KEY, name TEXT NOT NULL, project_type TEXT NOT NULL, start_date DATE NOT NULL, end_date DATE NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE, CHECK (end_date >= start_date))', []);
       await databaseQuery('CREATE TABLE IF NOT EXISTS support_tracker_user_projects (user_id TEXT NOT NULL REFERENCES support_tracker_users(user_id) ON DELETE CASCADE, project_id TEXT NOT NULL REFERENCES support_tracker_projects(project_id) ON DELETE CASCADE, PRIMARY KEY (user_id, project_id))', []);
-      await databaseQuery('CREATE TABLE IF NOT EXISTS support_tracker_records (record_id TEXT PRIMARY KEY, tracker_no TEXT NOT NULL UNIQUE, department TEXT NOT NULL, subject TEXT NOT NULL, request_type TEXT NOT NULL, developer TEXT NOT NULL, status TEXT NOT NULL, owner TEXT, expected_prod_date DATE, prod_deploy_date DATE, business_approval_date DATE, release_pr TEXT, created_date DATE, updated_at DATE, sfdc_status TEXT, is_active BOOLEAN NOT NULL DEFAULT TRUE)', []);
+      await databaseQuery('CREATE TABLE IF NOT EXISTS support_tracker_records (record_id TEXT PRIMARY KEY, project_id TEXT, tracker_no TEXT NOT NULL UNIQUE, department TEXT NOT NULL, subject TEXT NOT NULL, request_type TEXT NOT NULL, developer TEXT NOT NULL, status TEXT NOT NULL, owner TEXT, expected_prod_date DATE, prod_deploy_date DATE, business_approval_date DATE, release_pr TEXT, created_date DATE, updated_at DATE, sfdc_status TEXT, is_active BOOLEAN NOT NULL DEFAULT TRUE)', []);
+      await databaseQuery('ALTER TABLE support_tracker_records ADD COLUMN IF NOT EXISTS project_id TEXT', []);
       await databaseQuery('CREATE TABLE IF NOT EXISTS support_tracker_app_metadata (metadata_key TEXT PRIMARY KEY, metadata_value TEXT NOT NULL)', []);
       await databaseQuery('ALTER TABLE support_tracker_users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE', []);
       await databaseQuery('ALTER TABLE support_tracker_projects ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE', []);
@@ -288,7 +289,7 @@ async function readAppState() {
     databaseQuery('SELECT user_id, name, email, role, password_hash FROM support_tracker_users WHERE is_active = TRUE ORDER BY name', []),
     databaseQuery('SELECT project_id, name, project_type, start_date, end_date FROM support_tracker_projects WHERE is_active = TRUE ORDER BY name', []),
     databaseQuery('SELECT up.user_id, up.project_id FROM support_tracker_user_projects up JOIN support_tracker_users u ON u.user_id = up.user_id AND u.is_active = TRUE JOIN support_tracker_projects p ON p.project_id = up.project_id AND p.is_active = TRUE', []),
-    databaseQuery('SELECT record_id, tracker_no, department, subject, request_type, developer, status, owner, expected_prod_date, prod_deploy_date, business_approval_date, release_pr, created_date, updated_at, sfdc_status FROM support_tracker_records WHERE is_active = TRUE ORDER BY created_date DESC NULLS LAST', []),
+    databaseQuery('SELECT record_id, project_id, tracker_no, department, subject, request_type, developer, status, owner, expected_prod_date, prod_deploy_date, business_approval_date, release_pr, created_date, updated_at, sfdc_status FROM support_tracker_records WHERE is_active = TRUE ORDER BY created_date DESC NULLS LAST', []),
     databaseQuery('SELECT metadata_value FROM support_tracker_app_metadata WHERE metadata_key = $1', ['needs_migration']),
   ]);
   const value = (row, key) => row[key] ?? row[key.toUpperCase()];
@@ -302,7 +303,7 @@ async function readAppState() {
   const users = resultRows(usersResult).map((row) => ({ id: value(row, 'user_id'), name: value(row, 'name'), email: value(row, 'email'), role: value(row, 'role'), passwordHash: value(row, 'password_hash'), projectIds: assignments.get(value(row, 'user_id')) || [] }));
   const projects = resultRows(projectsResult).map((row) => ({ id: value(row, 'project_id'), name: value(row, 'name'), type: value(row, 'project_type'), startDate: date(value(row, 'start_date')), endDate: date(value(row, 'end_date')) }));
   const records = resultRows(recordsResult).map((row) => ({
-    id: value(row, 'record_id'), trackerNo: value(row, 'tracker_no'), department: value(row, 'department'), subject: value(row, 'subject'),
+    id: value(row, 'record_id'), projectId: value(row, 'project_id') || '', trackerNo: value(row, 'tracker_no'), department: value(row, 'department'), subject: value(row, 'subject'),
     requestType: value(row, 'request_type'), developer: value(row, 'developer'), status: value(row, 'status'), owner: value(row, 'owner') || '',
     expectedProdDate: date(value(row, 'expected_prod_date')), prodDeployDate: date(value(row, 'prod_deploy_date')),
     businessApprovalDate: date(value(row, 'business_approval_date')), releasePR: value(row, 'release_pr') || '',
@@ -628,12 +629,13 @@ const server = http.createServer((req, res) => requestContext.run(databaseDevice
       if (!user) return sendJson(res, 401, { success: false, error: 'Sign in required' });
       if (req.method === 'GET') {
         const state = await readAppState();
+        const assignedProjectIds = new Set(user.projectIds || []);
         return sendJson(res, 200, {
           success: true,
           state: {
             users: user.role === 'admin' ? state.users.map(publicUser) : [],
-            records: state.records,
-            projects: Array.isArray(state.projects) ? state.projects : [],
+            records: user.role === 'admin' ? state.records : state.records.filter((record) => assignedProjectIds.has(record.projectId)),
+            projects: user.role === 'admin' ? state.projects : state.projects.filter((project) => assignedProjectIds.has(project.id)),
             needsMigration: user.role === 'admin' && Boolean(state.needsMigration),
           },
         });
@@ -644,9 +646,22 @@ const server = http.createServer((req, res) => requestContext.run(databaseDevice
       if (user.role !== 'admin' && user.role !== 'developer') return sendJson(res, 403, { success: false, error: 'Your account cannot update tracker data' });
 
       const currentState = await readAppState();
+      const assignedProjectIds = new Set(user.projectIds || []);
       const projects = user.role === 'admin'
         ? normalizeProjects(state.projects === undefined ? currentState.projects || [] : state.projects)
         : currentState.projects || [];
+      for (const candidate of state.records) {
+        const existingRecord = currentState.records.find((record) => record.id === candidate?.id);
+        if (user.role !== 'admin' && (!candidate?.projectId || !assignedProjectIds.has(candidate.projectId))) {
+          return sendJson(res, 403, { success: false, error: 'You can only update records in your assigned projects' });
+        }
+        if (user.role !== 'admin' && existingRecord && !assignedProjectIds.has(existingRecord.projectId)) {
+          return sendJson(res, 403, { success: false, error: 'You cannot update a record outside your assigned projects' });
+        }
+        if (candidate?.projectId && !projects.some((project) => project.id === candidate.projectId) && existingRecord?.projectId !== candidate.projectId) {
+          return sendJson(res, 400, { success: false, error: 'Tracker records must reference an active project' });
+        }
+      }
       const users = user.role === 'admin'
         ? await normalizeAdminUsers(state.users, { ...currentState, projects })
         : currentState.users;
@@ -657,9 +672,16 @@ const server = http.createServer((req, res) => requestContext.run(databaseDevice
         return sendJson(res, 400, { success: false, error: 'At least one administrator account must remain' });
       }
 
-      const nextState = { users, records: state.records, projects, needsMigration: false };
+      let records = state.records;
+      if (user.role !== 'admin') {
+        const incomingById = new Map(state.records.map((record) => [record.id, record]));
+        records = currentState.records.map((record) => incomingById.get(record.id) || record);
+        const knownIds = new Set(currentState.records.map((record) => record.id));
+        records.push(...state.records.filter((record) => !knownIds.has(record.id)));
+      }
+      const nextState = { users, records, projects, needsMigration: false };
       await writeAppState(nextState);
-      return sendJson(res, 200, { success: true, users: user.role === 'admin' ? users.map(publicUser) : [], records: nextState.records, projects: nextState.projects });
+      return sendJson(res, 200, { success: true, users: user.role === 'admin' ? users.map(publicUser) : [], records: user.role === 'admin' ? nextState.records : state.records, projects: user.role === 'admin' ? nextState.projects : state.projects });
     } catch (error) {
       return sendJson(res, error.statusCode || 502, { success: false, error: error.message || 'Database request failed' });
     }

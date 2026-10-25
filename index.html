@@ -450,6 +450,17 @@
       background: var(--primary-light);
       color: var(--primary);
     }
+    .dashboard-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; box-shadow: var(--shadow-sm); }
+    .dashboard-heading { display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:1rem; }
+    .dashboard-heading h2 { font-size:1.1rem; color:var(--gray-900); }
+    .dashboard-controls { display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; }
+    .dashboard-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:.75rem; }
+    .dashboard-metric { padding:.9rem 1rem; border-radius:var(--radius); background:var(--gray-50); border:1px solid var(--border); }
+    .dashboard-metric strong { display:block; font-size:1.4rem; color:var(--gray-900); }
+    .dashboard-metric span { color:var(--gray-600); font-size:.82rem; }
+    .status-row { display:grid; grid-template-columns:110px 1fr 42px; gap:.75rem; align-items:center; margin:.65rem 0; font-size:.85rem; }
+    .status-track { height:10px; background:var(--gray-100); border-radius:99px; overflow:hidden; }
+    .status-fill { height:100%; background:var(--primary); border-radius:99px; }
 
     .user-profile {
       display: flex;
@@ -1129,6 +1140,7 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
               Tracker
             </button>
+            <button class="nav-tab" id="tab-btn-dashboard" onclick="switchView('dashboard')">Dashboard</button>
             <button class="nav-tab" id="tab-btn-users" onclick="switchView('users')" style="display: none;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               User Management
@@ -1152,6 +1164,24 @@
     </header>
 
     <main class="app-main">
+      <div id="section-dashboard" style="display:none; flex-direction:column; gap:1rem;">
+        <div class="dashboard-panel">
+          <div class="dashboard-heading">
+            <div><h2>Development status</h2><p style="color:var(--gray-500);font-size:.82rem;">Current status of requests created in the selected period.</p></div>
+            <div class="dashboard-controls">
+              <select id="dashboard-developer" class="filter-select" onchange="renderDashboard()"><option value="">All Developers</option></select>
+              <select id="dashboard-period" class="filter-select" onchange="updateDashboardPeriodControls();renderDashboard()"><option value="day">Daily</option><option value="month">Monthly</option><option value="year" selected>Yearly</option></select>
+              <select id="dashboard-year" class="filter-select" onchange="renderDashboard()"></select>
+              <select id="dashboard-month" class="filter-select" onchange="renderDashboard()" style="display:none"><option value="1">January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option></select>
+              <select id="dashboard-day" class="filter-select" onchange="renderDashboard()" style="display:none"></select>
+              <button class="btn btn-secondary btn-sm" id="btn-refresh" onclick="refreshApplicationData()" title="Reload tracker data from server">↻ Refresh</button>
+            </div>
+          </div>
+          <div class="dashboard-grid" id="dashboard-metrics"></div>
+        </div>
+        <div class="dashboard-panel"><div class="dashboard-heading"><h2>Status breakdown</h2><span id="dashboard-period-label" style="color:var(--gray-500);font-size:.82rem;"></span></div><div id="dashboard-status"></div></div>
+        <div class="dashboard-panel"><div class="dashboard-heading"><h2>Developer workload</h2><span style="color:var(--gray-500);font-size:.82rem;">Open, active, blocked and overdue requests</span></div><div id="dashboard-developers"></div></div>
+      </div>
       <!-- ── TRACKER SECTION ── -->
       <div id="section-tracker" style="display: flex; flex-direction: column; gap: 1.25rem;">
         
@@ -1226,6 +1256,10 @@
               <option value="">All Departments</option>
             </select>
 
+            <select id="filter-project" class="filter-select" onchange="renderTable()">
+              <option value="">All Assigned Projects</option>
+            </select>
+
             <select id="filter-status" class="filter-select" onchange="renderTable()">
               <option value="">All Statuses</option>
               <option value="Open">Open</option>
@@ -1270,6 +1304,7 @@
                   <th class="sticky-col" onclick="sortTable('trackerNo')" data-col="trackerNo">
                     <div class="th-content">Tracker No. <span class="sort-indicator">▲</span></div>
                   </th>
+                  <th onclick="sortTable('projectId')" data-col="projectId"><div class="th-content">Project <span class="sort-indicator">▲</span></div></th>
                   <th onclick="sortTable('department')" data-col="department">
                     <div class="th-content">Department <span class="sort-indicator">▲</span></div>
                   </th>
@@ -1405,6 +1440,11 @@
               <input type="text" id="rec-dept" class="form-control" list="dept-datalist" required placeholder="e.g. Billing, Sales, IT" />
               <datalist id="dept-datalist"></datalist>
               <div class="input-feedback" id="fb-dept">Department is required</div>
+            </div>
+
+            <div class="form-group">
+              <label for="rec-project">Project *</label>
+              <select id="rec-project" class="form-control" required></select>
             </div>
 
             <div class="form-group span-full">
@@ -1788,11 +1828,13 @@
 
       // Control access for new record creation
       const canEdit = currentUser.role === 'admin' || currentUser.role === 'developer';
-      document.getElementById('btn-add-record').style.display = canEdit ? 'inline-flex' : 'none';
+      document.getElementById('btn-add-record').style.display = canEdit && (isAdmin || projects.length > 0) ? 'inline-flex' : 'none';
 
       populateDepartmentFilter();
+      populateProjectFilter();
       updateStats();
       renderTable();
+      renderDashboard();
       if (isAdmin) {
         renderUsersList();
         renderProjectsList();
@@ -1848,15 +1890,99 @@
       const isUsers = tab === 'users';
 
       document.getElementById('tab-btn-tracker').classList.toggle('active', isTracker);
+      document.getElementById('tab-btn-dashboard').classList.toggle('active', tab === 'dashboard');
       document.getElementById('tab-btn-users').classList.toggle('active', isUsers);
       document.getElementById('tab-btn-projects').classList.toggle('active', tab === 'projects');
 
       document.getElementById('section-tracker').style.display = isTracker ? 'flex' : 'none';
+      document.getElementById('section-dashboard').style.display = tab === 'dashboard' ? 'flex' : 'none';
       document.getElementById('section-users').style.display = isUsers ? 'flex' : 'none';
       document.getElementById('section-projects').style.display = tab === 'projects' ? 'flex' : 'none';
 
       if (currentUser?.role === 'admin' && isUsers) renderUsersList();
       if (currentUser?.role === 'admin' && tab === 'projects') renderProjectsList();
+      if (tab === 'dashboard') renderDashboard();
+    }
+
+    async function refreshApplicationData() {
+      const button = document.getElementById('btn-refresh');
+      button.disabled = true;
+      button.textContent = 'Refreshing…';
+      try {
+        await loadApplicationState();
+        populateDepartmentFilter();
+        populateProjectFilter();
+        updateStats();
+        renderTable();
+        if (currentUser?.role === 'admin') { renderUsersList(); renderProjectsList(); }
+        renderDashboard();
+        showToast('Tracker data refreshed.', 'success');
+      } catch (error) {
+        showToast(`Refresh failed: ${error.message}`, 'error');
+      } finally {
+        button.disabled = false;
+        button.textContent = '↻ Refresh';
+      }
+    }
+
+    function updateDashboardPeriodControls() {
+      const period = document.getElementById('dashboard-period').value;
+      document.getElementById('dashboard-month').style.display = period === 'day' ? 'inline-block' : 'none';
+      document.getElementById('dashboard-day').style.display = period === 'day' ? 'inline-block' : 'none';
+    }
+
+    function renderDashboard() {
+      const devSelect = document.getElementById('dashboard-developer');
+      if (!devSelect) return;
+      const previousDeveloper = devSelect.value;
+      const names = [...new Set(records.map(record => String(record.developer || '').trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b));
+      devSelect.innerHTML = '<option value="">All Developers</option>' + names.map(name => `<option value="${escapeHTML(name)}">${escapeHTML(name)}</option>`).join('');
+      if (names.includes(previousDeveloper)) devSelect.value = previousDeveloper;
+
+      const currentYear = new Date().getFullYear();
+      const years = [...new Set([currentYear, ...records.map(record => Number(String(record.createdDate || '').slice(0,4))).filter(year => year >= 1900 && year <= 9999)])].sort((a,b) => b-a);
+      const yearSelect = document.getElementById('dashboard-year');
+      const previousYear = yearSelect.value;
+      yearSelect.innerHTML = years.map(year => `<option value="${year}">${year}</option>`).join('');
+      yearSelect.value = years.includes(Number(previousYear)) ? previousYear : String(currentYear);
+      const monthSelect = document.getElementById('dashboard-month');
+      if (!monthSelect.value) monthSelect.value = String(new Date().getMonth() + 1);
+      const daySelect = document.getElementById('dashboard-day');
+      const daysInMonth = new Date(Number(yearSelect.value), Number(monthSelect.value), 0).getDate();
+      const previousDay = Number(daySelect.value) || new Date().getDate();
+      daySelect.innerHTML = Array.from({length:daysInMonth}, (_,i) => `<option value="${i+1}">${i+1}</option>`).join('');
+      daySelect.value = String(Math.min(previousDay, daysInMonth));
+      updateDashboardPeriodControls();
+
+      const period = document.getElementById('dashboard-period').value;
+      const year = Number(yearSelect.value), month = Number(monthSelect.value), day = Number(daySelect.value);
+      const periodLabel = period === 'year' ? String(year) : period === 'month' ? new Date(year, month-1, 1).toLocaleDateString('en', {month:'long',year:'numeric'}) : new Date(year, month-1, day).toLocaleDateString('en', {day:'numeric',month:'long',year:'numeric'});
+      const inPeriod = records.filter(record => {
+        const date = String(record.createdDate || '');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+        const [recordYear, recordMonth, recordDay] = date.split('-').map(Number);
+        return period === 'year' ? recordYear === year : period === 'month' ? recordYear === year && recordMonth === month : recordYear === year && recordMonth === month && recordDay === day;
+      });
+      const selectedDeveloper = devSelect.value;
+      const selected = inPeriod.filter(record => !selectedDeveloper || record.developer === selectedDeveloper);
+      document.getElementById('dashboard-period-label').textContent = `${periodLabel} · ${selected.length} requests`;
+
+      const activeCount = selected.filter(record => ['Open','In Progress','In Review','Testing'].includes(record.status)).length;
+      const deployedCount = selected.filter(record => record.status === 'Deployed').length;
+      const blockedCount = selected.filter(record => record.status === 'Blocked').length;
+      const overdueCount = selected.filter(record => isOverdue(record.expectedProdDate, record.status)).length;
+      const metrics = [['Requests',selected.length],['Active',activeCount],['Deployed',deployedCount],['Blocked',blockedCount],['Overdue',overdueCount]];
+      document.getElementById('dashboard-metrics').innerHTML = metrics.map(([label,value]) => `<div class="dashboard-metric"><strong>${value}</strong><span>${label}</span></div>`).join('');
+
+      const statuses = [...new Set(['Open','In Progress','In Review','Testing','Deployed','Closed','Blocked', ...selected.map(record => record.status).filter(Boolean)])];
+      const statusCounts = statuses.map(status => [status, selected.filter(record => record.status === status).length]);
+      const maxStatus = Math.max(1, ...statusCounts.map(([,count]) => count));
+      document.getElementById('dashboard-status').innerHTML = statusCounts.map(([status,count]) => `<div class="status-row"><span>${escapeHTML(status)}</span><div class="status-track"><div class="status-fill" style="width:${count/maxStatus*100}%"></div></div><strong>${count}</strong></div>`).join('');
+
+      const grouped = new Map();
+      inPeriod.forEach(record => { const name = String(record.developer || 'Unassigned').trim() || 'Unassigned'; if (!selectedDeveloper || name === selectedDeveloper) grouped.set(name, [...(grouped.get(name) || []), record]); });
+      const rows = [...grouped.entries()].sort((a,b) => b[1].length-a[1].length || a[0].localeCompare(b[0]));
+      document.getElementById('dashboard-developers').innerHTML = rows.length ? `<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Developer</th><th>Total</th><th>Active</th><th>Blocked</th><th>Overdue</th><th>Deployed</th></tr></thead><tbody>${rows.map(([name,items]) => `<tr><td>${escapeHTML(name)}</td><td>${items.length}</td><td>${items.filter(r=>['Open','In Progress','In Review','Testing'].includes(r.status)).length}</td><td>${items.filter(r=>r.status==='Blocked').length}</td><td>${items.filter(r=>isOverdue(r.expectedProdDate,r.status)).length}</td><td>${items.filter(r=>r.status==='Deployed').length}</td></tr>`).join('')}</tbody></table></div>` : '<p style="color:var(--gray-500);padding:.75rem 0">No requests for this selection.</p>';
     }
 
     /* ── Search & Filter Logic ── */
@@ -1890,20 +2016,39 @@
       });
     }
 
+    function populateProjectFilter() {
+      const select = document.getElementById('filter-project');
+      const currentValue = select.value;
+      select.innerHTML = '<option value="">All Assigned Projects</option>' + projects
+        .map(project => `<option value="${escapeHTML(project.id)}">${escapeHTML(project.name)}</option>`).join('');
+      if (projects.some(project => project.id === currentValue)) select.value = currentValue;
+    }
+
+    function populateRecordProjectOptions(selectedId = '') {
+      const select = document.getElementById('rec-project');
+      select.innerHTML = '<option value="">Select project...</option>' + projects
+        .map(project => `<option value="${escapeHTML(project.id)}">${escapeHTML(project.name)}</option>`).join('');
+      if (selectedId && projects.some(project => project.id === selectedId)) select.value = selectedId;
+      else if (projects.length === 1) select.value = projects[0].id;
+    }
+
     function getFilteredRecords() {
       const searchTerm = document.getElementById('search-box').value.trim().toLowerCase();
       const deptFilter = document.getElementById('filter-dept').value;
+      const projectFilter = document.getElementById('filter-project').value;
       const statusFilter = document.getElementById('filter-status').value;
       const typeFilter = document.getElementById('filter-type').value;
 
       return records.filter(r => {
         if (deptFilter && r.department !== deptFilter) return false;
+        if (projectFilter && r.projectId !== projectFilter) return false;
         if (statusFilter && r.status !== statusFilter) return false;
         if (typeFilter && r.requestType !== typeFilter) return false;
 
         if (searchTerm) {
           const haystack = [
             r.trackerNo,
+            projects.find(project => project.id === r.projectId)?.name,
             r.department,
             r.subject,
             r.requestType,
@@ -2024,6 +2169,7 @@
                   ${overdue ? '<span class="badge-overdue" title="Past Expected Deployment Date">⚠️ Overdue</span>' : ''}
                 </div>
               </td>
+              <td>${escapeHTML(projects.find(project => project.id === r.projectId)?.name || 'Unassigned')}</td>
               <td>${escapeHTML(r.department)}</td>
               <td style="max-width: 280px; overflow: hidden; text-overflow: ellipsis; font-weight: 500;" title="${escapeHTML(r.subject)}">
                 ${escapeHTML(r.subject)}
@@ -2106,6 +2252,7 @@
         if (!item) return;
 
         document.getElementById('rec-trackerno').value = item.trackerNo || '';
+        populateRecordProjectOptions(item.projectId || '');
         document.getElementById('rec-dept').value = item.department || '';
         document.getElementById('rec-subject').value = item.subject || '';
         document.getElementById('rec-type').value = item.requestType || '';
@@ -2119,6 +2266,7 @@
         document.getElementById('rec-sfdc').value = item.sfdcStatus || '';
       } else {
         document.getElementById('form-record').reset();
+        populateRecordProjectOptions();
         // Auto-increment suggestion
         const nextNum = records.length + 1;
         const year = new Date().getFullYear();
@@ -2134,6 +2282,7 @@
       const previousRecords = records.map(record => ({ ...record }));
 
       const trackerNo = document.getElementById('rec-trackerno').value.trim();
+      const projectId = document.getElementById('rec-project').value;
       const department = document.getElementById('rec-dept').value.trim();
       const subject = document.getElementById('rec-subject').value.trim();
       const requestType = document.getElementById('rec-type').value;
@@ -2146,7 +2295,7 @@
       const releasePR = document.getElementById('rec-pr').value.trim();
       const sfdcStatus = document.getElementById('rec-sfdc').value;
 
-      if (!trackerNo || !department || !subject || !requestType || !developer || !status) {
+      if (!trackerNo || !projectId || !department || !subject || !requestType || !developer || !status) {
         showToast('Please fill all required fields.', 'error');
         return;
       }
@@ -2166,6 +2315,7 @@
           records[idx] = {
             ...records[idx],
             trackerNo,
+            projectId,
             department,
             subject,
             requestType,
@@ -2184,6 +2334,7 @@
         const newRecord = {
           id: 'rec-' + Date.now(),
           trackerNo,
+          projectId,
           department,
           subject,
           requestType,
@@ -2256,6 +2407,7 @@
 
       const fields = [
         { label: 'Tracker No.', value: item.trackerNo, span: false },
+        { label: 'Project', value: projects.find(project => project.id === item.projectId)?.name || 'Unassigned', span: false },
         { label: 'Department', value: item.department, span: false },
         { label: 'Subject', value: item.subject, span: true },
         { label: 'Type of Request', value: item.requestType, span: false },
@@ -2491,8 +2643,10 @@
       const saved = result.project;
       projects = isEdit ? projects.map(project => project.id === saved.id ? saved : project) : [...projects, saved];
       closeModal('modal-project');
+      populateProjectFilter();
       renderProjectsList();
       renderUsersList();
+      renderTable();
       showToast(isEdit ? 'Project updated successfully.' : 'Project created successfully.', 'success');
     }
 
@@ -2510,8 +2664,10 @@
         projects = projects.filter(item => item.id !== id);
         users = users.map(user => ({ ...user, projectIds: (user.projectIds || []).filter(projectId => projectId !== id) }));
         closeModal('modal-confirm');
+        populateProjectFilter();
         renderProjectsList();
         renderUsersList();
+        renderTable();
         showToast('Project archived successfully.', 'success');
       };
       openModal('modal-confirm');
