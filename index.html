@@ -1927,7 +1927,7 @@
 
     function updateDashboardPeriodControls() {
       const period = document.getElementById('dashboard-period').value;
-      document.getElementById('dashboard-month').style.display = period === 'day' ? 'inline-block' : 'none';
+      document.getElementById('dashboard-month').style.display = period === 'month' || period === 'day' ? 'inline-block' : 'none';
       document.getElementById('dashboard-day').style.display = period === 'day' ? 'inline-block' : 'none';
     }
 
@@ -1940,7 +1940,10 @@
       if (names.includes(previousDeveloper)) devSelect.value = previousDeveloper;
 
       const currentYear = new Date().getFullYear();
-      const years = [...new Set([currentYear, ...records.map(record => Number(String(record.createdDate || '').slice(0,4))).filter(year => year >= 1900 && year <= 9999)])].sort((a,b) => b-a);
+      const years = [...new Set([
+        ...Array.from({length: 10}, (_, index) => currentYear - index),
+        ...records.map(record => Number(String(record.createdDate || '').slice(0,4))).filter(year => year >= 1900 && year <= 9999)
+      ])].sort((a,b) => b-a);
       const yearSelect = document.getElementById('dashboard-year');
       const previousYear = yearSelect.value;
       yearSelect.innerHTML = years.map(year => `<option value="${year}">${year}</option>`).join('');
