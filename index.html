@@ -256,6 +256,9 @@
     .badge-in-review { background: var(--purple-light); color: var(--purple); }
     .badge-in-review::before { background: var(--purple); }
 
+    .badge-in-deployment { background: var(--warning-light); color: var(--warning); }
+    .badge-in-deployment::before { background: var(--warning); }
+
     .badge-testing { background: #e0f2fe; color: #0369a1; }
     .badge-testing::before { background: #0284c7; }
 
@@ -1144,6 +1147,7 @@
               <select id="dashboard-year" class="filter-select" onchange="renderDashboard()"></select>
               <select id="dashboard-month" class="filter-select" onchange="renderDashboard()" style="display:none"><option value="1">January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option></select>
               <select id="dashboard-day" class="filter-select" onchange="renderDashboard()" style="display:none"></select>
+              <button class="btn btn-secondary btn-sm" onclick="openDeploymentEmailDraft()" title="Draft an email for all records in deployment">Draft Deployment Email</button>
             </div>
           </div>
           <div class="dashboard-grid" id="dashboard-metrics"></div>
@@ -1248,6 +1252,7 @@
               <option value="In Progress">In Progress</option>
               <option value="In Review">In Review</option>
               <option value="Testing">Testing</option>
+              <option value="In Deployment">In Deployment</option>
               <option value="Deployed">Deployed</option>
               <option value="Rejected">Rejected</option>
             </select>
@@ -1267,6 +1272,7 @@
           <div class="action-group">
             <span id="dashboard-drilldown-label" style="display:none;color:var(--primary);font-size:.8rem;"></span>
             <button class="btn btn-secondary btn-sm" id="btn-clear-dashboard-drilldown" onclick="clearDashboardDrilldown()" style="display:none">Clear dashboard selection</button>
+            <button class="btn btn-secondary btn-sm" onclick="openDeploymentEmailDraft()" title="Draft an email for all records in deployment">Draft Deployment Email</button>
             <button class="btn btn-secondary btn-sm" onclick="exportFilteredCSV()" title="Export filtered records to CSV">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Export CSV
@@ -1319,10 +1325,10 @@
                     <div class="th-content">Created Date <span class="sort-indicator">▲</span></div>
                   </th>
                   <th onclick="sortTable('owner')" data-col="owner">
-                    <div class="th-content">Owner <span class="sort-indicator">▲</span></div>
+                    <div class="th-content">Business Approver <span class="sort-indicator">▲</span></div>
                   </th>
                   <th onclick="sortTable('sfdcStatus')" data-col="sfdcStatus">
-                    <div class="th-content">SFDC Status <span class="sort-indicator">▲</span></div>
+                    <div class="th-content">ServiceNow Status <span class="sort-indicator">▲</span></div>
                   </th>
                   <th class="no-sort action-cell" style="text-align: right;">Actions</th>
                 </tr>
@@ -1462,14 +1468,41 @@
                 <option value="In Progress">In Progress</option>
                 <option value="In Review">In Review</option>
                 <option value="Testing">Testing</option>
+                <option value="In Deployment">In Deployment</option>
                 <option value="Deployed">Deployed</option>
                 <option value="Rejected">Rejected</option>
               </select>
             </div>
 
             <div class="form-group">
-              <label for="rec-owner">Owner</label>
-              <input type="text" id="rec-owner" class="form-control" placeholder="Business owner" />
+              <label for="rec-owner">Business Approver Name</label>
+              <input type="text" id="rec-owner" class="form-control" placeholder="Approver name" />
+            </div>
+
+            <div class="form-group">
+              <label for="rec-change-risk">Change Risk</label>
+              <select id="rec-change-risk" class="form-control">
+                <option value="">-- Select risk --</option>
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Critical">Critical</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="rec-impacted-area">Impacted Business Area</label>
+              <input type="text" id="rec-impacted-area" class="form-control" placeholder="Business area or team" />
+            </div>
+
+            <div class="form-group span-full">
+              <label for="rec-remediation">Remediation Strategy</label>
+              <textarea id="rec-remediation" class="form-control" rows="2" placeholder="Rollback or recovery plan"></textarea>
+            </div>
+
+            <div class="form-group span-full">
+              <label for="rec-comment">Comment</label>
+              <textarea id="rec-comment" class="form-control" rows="2" placeholder="Deployment notes"></textarea>
             </div>
 
             <div class="form-group">
@@ -1492,8 +1525,13 @@
               <input type="text" id="rec-pr" class="form-control" placeholder="PR number or URL" />
             </div>
 
+            <div class="form-group">
+              <label for="rec-feature-branch">GitHub Feature Branch</label>
+              <input type="text" id="rec-feature-branch" class="form-control" placeholder="feature/branch-name" />
+            </div>
+
             <div class="form-group span-full">
-              <label for="rec-sfdc">SFDC Status</label>
+              <label for="rec-sfdc">ServiceNow Status</label>
               <select id="rec-sfdc" class="form-control">
                 <option value="">-- None --</option>
                 <option value="Open">Open</option>
@@ -1509,6 +1547,28 @@
           <button type="submit" class="btn btn-primary" id="btn-save-record">Save Record</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="modal-deployment-email">
+    <div class="modal-dialog" style="max-width:1100px">
+      <div class="modal-header">
+        <h3 class="modal-title">Draft Deployment Email</h3>
+        <button class="btn-icon" onclick="closeModal('modal-deployment-email')" aria-label="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group" style="margin-bottom:1rem">
+          <label for="deployment-email-subject">Email subject</label>
+          <input id="deployment-email-subject" class="form-control" type="text" />
+        </div>
+        <p id="deployment-email-count" style="font-size:.82rem;color:var(--gray-500);margin-bottom:.75rem"></p>
+        <div id="deployment-email-preview" style="max-height:55vh;overflow:auto;border:1px solid var(--border);border-radius:var(--radius);padding:1rem;background:#fff;color:#1f2937"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modal-deployment-email')">Close</button>
+        <button type="button" class="btn btn-secondary" onclick="copyDeploymentEmailSubject()">Copy subject</button>
+        <button type="button" class="btn btn-primary" onclick="copyDeploymentEmail()">Copy email body</button>
+      </div>
     </div>
   </div>
 
@@ -2032,7 +2092,7 @@
         const developer = button.dataset.drillDeveloper;
         const metric = button.dataset.drillMetric;
         const rows = dashboardDrilldownData.developers.get(developer) || [];
-        const activeStatuses = ['Open','In Progress','In Review','Testing'];
+        const activeStatuses = ['Open','In Progress','In Review','Testing','In Deployment'];
         const filtered = metric === 'active' ? rows.filter(record => activeStatuses.includes(record.status))
           : metric === 'rejected' ? rows.filter(record => record.status === 'Rejected')
           : metric === 'overdue' ? rows.filter(record => isOverdue(record.expectedProdDate, record.status))
@@ -2116,7 +2176,7 @@
       const selected = inPeriod.filter(record => !selectedDeveloper || String(record.developer || '').trim() === selectedDeveloper);
       document.getElementById('dashboard-period-label').textContent = `${periodLabel} · ${selected.length} requests`;
 
-      const activeStatuses = ['Open','In Progress','In Review','Testing'];
+      const activeStatuses = ['Open','In Progress','In Review','Testing','In Deployment'];
       const ongoingStatuses = [...activeStatuses];
       const activeCount = selected.filter(record => activeStatuses.includes(record.status)).length;
       const ongoingCount = selected.filter(record => ongoingStatuses.includes(record.status)).length;
@@ -2152,7 +2212,7 @@
       dashboardDrilldownData.metrics = new Map(metrics.map(metric => [metric[0], metric[3]]));
       document.getElementById('dashboard-metrics').innerHTML = metrics.map(([key,label,value]) => `<button type="button" class="dashboard-metric dashboard-drill-card" data-drill-key="${key}" data-drill-label="${escapeHTML(label)}"><strong>${value}</strong><span>${escapeHTML(label)}</span></button>`).join('');
 
-      const statuses = [...new Set(['Open','In Progress','In Review','Testing','Deployed','Rejected', ...selected.map(record => record.status).filter(Boolean)])];
+      const statuses = [...new Set(['Open','In Progress','In Review','Testing','In Deployment','Deployed','Rejected', ...selected.map(record => record.status).filter(Boolean)])];
       const statusCounts = statuses.map(status => [status, selected.filter(record => record.status === status).length]);
       const maxStatus = Math.max(1, ...statusCounts.map(([,count]) => count));
       dashboardDrilldownData.statuses = new Map(statusCounts.map(([status]) => [status, selected.filter(record => record.status === status)]));
@@ -2198,8 +2258,105 @@
       const rows = [...grouped.entries()].sort((a,b) => b[1].length-a[1].length || a[0].localeCompare(b[0]));
       dashboardDrilldownData.developers = new Map(rows);
       const countButton = (name, metric, count) => `<button type="button" class="dashboard-drill" data-drill-developer="${escapeHTML(name)}" data-drill-metric="${metric}" title="Show ${count} ${escapeHTML(metric)} records for ${escapeHTML(name)} in Tracker">${count}</button>`;
-      document.getElementById('dashboard-developers').innerHTML = rows.length ? `<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Developer</th><th>Total</th><th>Active</th><th>Rejected</th><th>Overdue</th><th>Deployed</th></tr></thead><tbody>${rows.map(([name,items]) => `<tr><td>${countButton(name,'total',escapeHTML(name))}</td><td>${countButton(name,'total',items.length)}</td><td>${countButton(name,'active',items.filter(r=>['Open','In Progress','In Review','Testing'].includes(r.status)).length)}</td><td>${countButton(name,'rejected',items.filter(r=>r.status==='Rejected').length)}</td><td>${countButton(name,'overdue',items.filter(r=>isOverdue(r.expectedProdDate,r.status)).length)}</td><td>${countButton(name,'deployed',items.filter(r=>r.status==='Deployed').length)}</td></tr>`).join('')}</tbody></table></div>` : '<p style="color:var(--gray-500);padding:.75rem 0">No requests for this selection.</p>';
+      document.getElementById('dashboard-developers').innerHTML = rows.length ? `<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Developer</th><th>Total</th><th>Active</th><th>Rejected</th><th>Overdue</th><th>Deployed</th></tr></thead><tbody>${rows.map(([name,items]) => `<tr><td>${countButton(name,'total',escapeHTML(name))}</td><td>${countButton(name,'total',items.length)}</td><td>${countButton(name,'active',items.filter(r=>['Open','In Progress','In Review','Testing','In Deployment'].includes(r.status)).length)}</td><td>${countButton(name,'rejected',items.filter(r=>r.status==='Rejected').length)}</td><td>${countButton(name,'overdue',items.filter(r=>isOverdue(r.expectedProdDate,r.status)).length)}</td><td>${countButton(name,'deployed',items.filter(r=>r.status==='Deployed').length)}</td></tr>`).join('')}</tbody></table></div>` : '<p style="color:var(--gray-500);padding:.75rem 0">No requests for this selection.</p>';
       enableDashboardDrilldownProgress();
+    }
+
+    function formatEmailDate(dateValue) {
+      if (!dateValue) return '';
+      const parts = String(dateValue).split('-').map(Number);
+      if (parts.length !== 3 || parts.some(Number.isNaN)) return String(dateValue);
+      const date = new Date(parts[0], parts[1] - 1, parts[2]);
+      const weekday = date.toLocaleDateString('en', { weekday: 'long' });
+      const month = date.toLocaleDateString('en', { month: 'long' });
+      return `${weekday}, ${String(parts[2]).padStart(2, '0')} ${month}, ${parts[0]}`;
+    }
+
+    function buildDeploymentEmailContent() {
+      const headers = [
+        'Application Name', 'Responsible Developer', 'Ticket Number', 'Description',
+        'Business Approver Name', 'Business Approval Date', 'Change Risk',
+        'Impacted Business Area', 'Remediation Strategy', 'Comment', 'ServiceNow Status',
+        'Planned deployment Date', 'Actual Deployment Date', 'GitHub Feature Branch'
+      ];
+      const deploymentRecords = records.filter(record => record.status === 'In Deployment')
+        .sort((a,b) => String(a.expectedProdDate || '').localeCompare(String(b.expectedProdDate || '')) || String(a.trackerNo || '').localeCompare(String(b.trackerNo || '')));
+      const rows = deploymentRecords.map(record => [
+        projects.find(project => project.id === record.projectId)?.name || '',
+        record.developer || '', record.trackerNo || '', record.subject || '', record.owner || '',
+        formatEmailDate(record.businessApprovalDate), record.changeRisk || '', record.impactedBusinessArea || '',
+        record.remediationStrategy || '', record.comment || '', record.sfdcStatus || '',
+        formatEmailDate(record.expectedProdDate), formatEmailDate(record.prodDeployDate), record.featureBranch || ''
+      ]);
+      const inlineTh = 'border:1px solid #cbd5e1;background:#eff6ff;padding:8px;text-align:left;vertical-align:top;font-weight:600;white-space:nowrap;';
+      const inlineTd = 'border:1px solid #cbd5e1;padding:8px;text-align:left;vertical-align:top;';
+      const htmlTable = `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;min-width:1500px"><thead><tr>${headers.map(header => `<th style="${inlineTh}">${escapeHTML(header)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td style="${inlineTd}">${escapeHTML(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+      const html = `<p>Hi Team,</p><p>Please find below the deployment details for requests currently marked <strong>In Deployment</strong>.</p>${htmlTable}<p>Regards,</p>`;
+      const plainText = `Hi Team,\n\nPlease find below the deployment details for requests currently marked In Deployment.\n\n${headers.join('\t')}\n${rows.map(row => row.join('\t')).join('\n')}\n\nRegards,`;
+      return { headers, rows, html, plainText };
+    }
+
+    function openDeploymentEmailDraft() {
+      const content = buildDeploymentEmailContent();
+      document.getElementById('deployment-email-subject').value = `Planned deployment details — ${toLocalISODate()}`;
+      document.getElementById('deployment-email-count').textContent = `${content.rows.length} request${content.rows.length === 1 ? '' : 's'} marked In Deployment will be included.`;
+      document.getElementById('deployment-email-preview').innerHTML = content.rows.length ? content.html : '<p>There are no records currently marked In Deployment.</p>';
+      openModal('modal-deployment-email');
+    }
+
+    async function copyDeploymentEmailSubject() {
+      const subject = document.getElementById('deployment-email-subject').value;
+      try {
+        if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(subject);
+        else {
+          const temporary = document.createElement('textarea');
+          temporary.value = subject;
+          temporary.style.position = 'fixed';
+          temporary.style.opacity = '0';
+          document.body.appendChild(temporary);
+          temporary.select();
+          const copied = document.execCommand('copy');
+          temporary.remove();
+          if (!copied) throw new Error('Clipboard access is unavailable');
+        }
+        showToast('Email subject copied.', 'success');
+      } catch (error) {
+        showToast(`Could not copy the email subject: ${error.message}`, 'error');
+      }
+    }
+
+    async function copyDeploymentEmail() {
+      const content = buildDeploymentEmailContent();
+      if (!content.rows.length) {
+        showToast('There are no In Deployment records to include.', 'error');
+        return;
+      }
+      const preview = document.getElementById('deployment-email-preview');
+      try {
+        let clipboardCopied = false;
+        if (navigator.clipboard?.write && window.ClipboardItem) {
+          try {
+            await navigator.clipboard.write([new ClipboardItem({
+              'text/html': new Blob([content.html], { type: 'text/html' }),
+              'text/plain': new Blob([content.plainText], { type: 'text/plain' })
+            })]);
+            clipboardCopied = true;
+          } catch (clipboardError) { /* Fall back to copying the rendered table. */ }
+        }
+        if (!clipboardCopied) {
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(preview);
+          selection.removeAllRanges();
+          selection.addRange(range);
+          const copied = document.execCommand('copy');
+          selection.removeAllRanges();
+          if (!copied) throw new Error('Clipboard access is unavailable');
+        }
+        showToast('Email table copied. Paste it into your email draft.', 'success');
+      } catch (error) {
+        showToast(`Could not copy the email table: ${error.message}`, 'error');
+      }
     }
 
     /* ── Search & Filter Logic ── */
@@ -2283,7 +2440,12 @@
             r.developer,
             r.status,
             r.owner,
+            r.changeRisk,
+            r.impactedBusinessArea,
+            r.remediationStrategy,
+            r.comment,
             r.releasePR,
+            r.featureBranch,
             r.sfdcStatus
           ].filter(Boolean).join(' ').toLowerCase();
 
@@ -2302,7 +2464,7 @@
       let overdue = 0;
 
       records.forEach(r => {
-        if (r.status === 'In Progress' || r.status === 'Open' || r.status === 'In Review' || r.status === 'Testing') {
+        if (r.status === 'In Progress' || r.status === 'Open' || r.status === 'In Review' || r.status === 'Testing' || r.status === 'In Deployment') {
           active++;
         }
         if (r.status === 'Deployed') deployed++;
@@ -2487,10 +2649,15 @@
         document.getElementById('rec-developer').value = item.developer || '';
         document.getElementById('rec-status').value = item.status || 'Open';
         document.getElementById('rec-owner').value = item.owner || '';
+        document.getElementById('rec-change-risk').value = item.changeRisk || '';
+        document.getElementById('rec-impacted-area').value = item.impactedBusinessArea || '';
+        document.getElementById('rec-remediation').value = item.remediationStrategy || '';
+        document.getElementById('rec-comment').value = item.comment || '';
         document.getElementById('rec-expected-date').value = item.expectedProdDate || '';
         document.getElementById('rec-prod-date').value = item.prodDeployDate || '';
         document.getElementById('rec-approval-date').value = item.businessApprovalDate || '';
         document.getElementById('rec-pr').value = item.releasePR || '';
+        document.getElementById('rec-feature-branch').value = item.featureBranch || '';
         document.getElementById('rec-sfdc').value = item.sfdcStatus || '';
       } else {
         document.getElementById('form-record').reset();
@@ -2517,10 +2684,15 @@
       const developer = document.getElementById('rec-developer').value.trim();
       const status = document.getElementById('rec-status').value;
       const owner = document.getElementById('rec-owner').value.trim();
+      const changeRisk = document.getElementById('rec-change-risk').value;
+      const impactedBusinessArea = document.getElementById('rec-impacted-area').value.trim();
+      const remediationStrategy = document.getElementById('rec-remediation').value.trim();
+      const comment = document.getElementById('rec-comment').value.trim();
       const expectedProdDate = document.getElementById('rec-expected-date').value;
       const prodDeployDate = document.getElementById('rec-prod-date').value;
       const businessApprovalDate = document.getElementById('rec-approval-date').value;
       const releasePR = document.getElementById('rec-pr').value.trim();
+      const featureBranch = document.getElementById('rec-feature-branch').value.trim();
       const sfdcStatus = document.getElementById('rec-sfdc').value;
 
       if (!trackerNo || !projectId || !department || !subject || !requestType || !developer || !status) {
@@ -2550,10 +2722,15 @@
             developer,
             status,
             owner,
+            changeRisk,
+            impactedBusinessArea,
+            remediationStrategy,
+            comment,
             expectedProdDate,
             prodDeployDate,
             businessApprovalDate,
             releasePR,
+            featureBranch,
             sfdcStatus,
             updatedAt: today
           };
@@ -2569,10 +2746,15 @@
           developer,
           status,
           owner,
+          changeRisk,
+          impactedBusinessArea,
+          remediationStrategy,
+          comment,
           expectedProdDate,
           prodDeployDate,
           businessApprovalDate,
           releasePR,
+          featureBranch,
           sfdcStatus,
           createdDate: today
         };
@@ -2645,13 +2827,18 @@
         { label: 'Type of Request', value: item.requestType, span: false },
         { label: 'Developer', value: item.developer, span: false },
         { label: 'Status', value: item.status, span: false },
-        { label: 'Owner', value: item.owner || '—', span: false },
+        { label: 'Business Approver Name', value: item.owner || '—', span: false },
+        { label: 'Change Risk', value: item.changeRisk || '—', span: false },
+        { label: 'Impacted Business Area', value: item.impactedBusinessArea || '—', span: false },
+        { label: 'Remediation Strategy', value: item.remediationStrategy || '—', span: true },
+        { label: 'Comment', value: item.comment || '—', span: true },
         { label: 'Expected Prod Date', value: formatDate(item.expectedProdDate), span: false },
         { label: 'Prod Deployment Date', value: formatDate(item.prodDeployDate), span: false },
         { label: 'Business Approval Date', value: formatDate(item.businessApprovalDate), span: false },
         { label: 'Release Pull Request', value: item.releasePR || '—', span: false },
+        { label: 'GitHub Feature Branch', value: item.featureBranch || '—', span: false },
         { label: 'Created Date', value: formatDate(item.createdDate), span: false },
-        { label: 'SFDC Status', value: item.sfdcStatus || '—', span: false }
+        { label: 'ServiceNow Status', value: item.sfdcStatus || '—', span: false }
       ];
 
       detailsContainer.innerHTML = fields.map(f => `
@@ -2949,10 +3136,15 @@
         'Expected Prod Deployment Date',
         'Prod Deployment Date',
         'Business Approval Date',
+        'Change Risk',
+        'Impacted Business Area',
+        'Remediation Strategy',
+        'Comment',
         'Release Pull Request',
+        'GitHub Feature Branch',
         'Created Date',
-        'Owner',
-        'SFDC Status'
+        'Business Approver Name',
+        'ServiceNow Status'
       ];
 
       const keys = [
@@ -2965,7 +3157,12 @@
         'expectedProdDate',
         'prodDeployDate',
         'businessApprovalDate',
+        'changeRisk',
+        'impactedBusinessArea',
+        'remediationStrategy',
+        'comment',
         'releasePR',
+        'featureBranch',
         'createdDate',
         'owner',
         'sfdcStatus'
