@@ -209,7 +209,7 @@ function resultRows(result) {
 
 function normalizeTrackerStatus(status) {
   const value = String(status || '').trim();
-  if (value.toLowerCase() === 'closed' || value.toLowerCase() === 'deployed') return 'Deployed';
+  if (['closed', 'deployed', 'resolved', 'deployment completed'].includes(value.toLowerCase())) return 'Deployed';
   if (value.toLowerCase() === 'blocked' || value.toLowerCase() === 'rejected') return 'Rejected';
   return value;
 }
@@ -301,6 +301,12 @@ async function ensureStateTable() {
         await databaseQuery('UPDATE support_tracker_records SET status = $1 WHERE status = $2', ['Deployed', 'Closed']);
         await databaseQuery('UPDATE support_tracker_records SET status = $1 WHERE status = $2', ['Rejected', 'Blocked']);
         await databaseQuery('INSERT INTO support_tracker_app_metadata (metadata_key, metadata_value) VALUES ($1, $2) ON CONFLICT (metadata_key) DO NOTHING', ['tracker_statuses_v2', 'true']);
+      }
+      const completionStatusMigrationRow = resultRows(await databaseQuery('SELECT metadata_value FROM support_tracker_app_metadata WHERE metadata_key = $1', ['tracker_completion_statuses_v3']))[0];
+      if (!completionStatusMigrationRow) {
+        await databaseQuery('UPDATE support_tracker_records SET status = $1 WHERE status = $2', ['Deployed', 'Resolved']);
+        await databaseQuery('UPDATE support_tracker_records SET status = $1 WHERE status = $2', ['Deployed', 'Deployment Completed']);
+        await databaseQuery('INSERT INTO support_tracker_app_metadata (metadata_key, metadata_value) VALUES ($1, $2) ON CONFLICT (metadata_key) DO NOTHING', ['tracker_completion_statuses_v3', 'true']);
       }
       const configuredAdmin = resultRows(await databaseQuery('SELECT user_id FROM support_tracker_users WHERE LOWER(email) = $1', [initialAdmin.email]))[0];
       if (!configuredAdmin) {
