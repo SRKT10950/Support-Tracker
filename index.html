@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Project Development Tracker</title>
+  <title>Tracker</title>
   <style>
     :root {
       --primary: #2563eb;
@@ -344,23 +344,6 @@
       display: none;
     }
 
-    .demo-credentials {
-      margin-top: 1.75rem;
-      padding: 0.75rem 1rem;
-      background: var(--gray-50);
-      border-radius: var(--radius-sm);
-      border: 1px dashed var(--gray-300);
-      font-size: 0.775rem;
-      color: var(--gray-600);
-    }
-    .demo-credentials code {
-      background: var(--gray-200);
-      padding: 2px 5px;
-      border-radius: 4px;
-      font-weight: 600;
-      color: var(--gray-800);
-    }
-
     /* ═══════════════════════════════════════
        APP SHELL & HEADER
     ═══════════════════════════════════════ */
@@ -438,6 +421,10 @@
     .dashboard-metric { padding:.9rem 1rem; border-radius:var(--radius); background:var(--gray-50); border:1px solid var(--border); }
     .dashboard-metric strong { display:block; font-size:1.4rem; color:var(--gray-900); }
     .dashboard-metric span { color:var(--gray-600); font-size:.82rem; }
+    .dashboard-drill-card { text-align:left; width:100%; cursor:pointer; color:inherit; font:inherit; }
+    .dashboard-drill-card:hover,.dashboard-drill:hover { border-color:var(--primary); background:var(--primary-light); color:var(--primary); }
+    .dashboard-drill-card:focus-visible,.dashboard-drill:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
+    .dashboard-drill { border:0; background:transparent; color:var(--primary); font:inherit; font-weight:700; text-decoration:underline; text-underline-offset:2px; cursor:pointer; padding:.2rem; border-radius:4px; }
     .status-row { display:grid; grid-template-columns:110px 1fr 42px; gap:.75rem; align-items:center; margin:.65rem 0; font-size:.85rem; }
     .status-track { height:10px; background:var(--gray-100); border-radius:99px; overflow:hidden; }
     .status-fill { height:100%; background:var(--primary); border-radius:99px; }
@@ -1060,8 +1047,7 @@
             <polyline points="8 6 2 12 8 18"></polyline>
           </svg>
         </div>
-        <h1>Development Tracker</h1>
-        <p>Enterprise Request &amp; Release Portal</p>
+        <h1>Tracker</h1>
       </div>
 
       <div id="login-alert" class="login-alert" role="alert"></div>
@@ -1073,7 +1059,7 @@
             type="email" 
             id="input-email" 
             class="form-control" 
-            placeholder="admin@company.com" 
+            placeholder="Enter your email"
             required 
             autocomplete="username"
             autofocus
@@ -1102,10 +1088,6 @@
         </button>
       </form>
 
-      <div class="demo-credentials">
-        <strong>Default Admin:</strong> <code>admin@company.com</code><br/>
-        <strong>Password:</strong> <code>admin123</code>
-      </div>
     </div>
   </section>
 
@@ -1167,12 +1149,16 @@
           <div class="dashboard-grid" id="dashboard-metrics"></div>
         </div>
         <div class="dashboard-panel"><div class="dashboard-heading"><h2>Status breakdown</h2><span id="dashboard-period-label" style="color:var(--gray-500);font-size:.82rem;"></span></div><div id="dashboard-status"></div></div>
+        <div class="dashboard-analysis-grid">
+          <div class="dashboard-panel"><div class="dashboard-heading"><div><h2>Request type mix</h2><p style="font-size:.8rem;color:var(--gray-500);">Demand by request type</p></div></div><div id="dashboard-request-types"></div></div>
+          <div class="dashboard-panel"><div class="dashboard-heading"><div><h2>Department summary</h2><p style="font-size:.8rem;color:var(--gray-500);">Active delivery, rejected, overdue and deployed work</p></div></div><div id="dashboard-departments"></div></div>
+        </div>
         <div class="dashboard-panel"><div class="dashboard-heading"><div><h2>Monthly throughput</h2><p style="font-size:.8rem;color:var(--gray-500);">Requests created and production deployments by month</p></div><div class="chart-legend"><span><i></i>Created</span><span><i class="deployed"></i>Deployed</span></div></div><div id="dashboard-throughput" class="dashboard-chart" role="img" aria-label="Monthly requests created and deployed chart"></div></div>
         <div class="dashboard-analysis-grid">
           <div class="dashboard-panel"><div class="dashboard-heading"><div><h2>SLA performance</h2><p style="font-size:.8rem;color:var(--gray-500);">Measured against expected production date</p></div></div><div class="dashboard-grid" id="dashboard-sla"></div><p id="dashboard-sla-note" style="font-size:.76rem;color:var(--gray-500);margin-top:.75rem"></p></div>
           <div class="dashboard-panel"><div class="dashboard-heading"><div><h2>Work aging</h2><p style="font-size:.8rem;color:var(--gray-500);">Age of ongoing requests, from creation date</p></div></div><div id="dashboard-aging"></div></div>
         </div>
-        <div class="dashboard-panel"><div class="dashboard-heading"><h2>Developer workload</h2><span style="color:var(--gray-500);font-size:.82rem;">Open, active, blocked and overdue requests</span></div><div id="dashboard-developers"></div></div>
+        <div class="dashboard-panel"><div class="dashboard-heading"><h2>Developer workload</h2><span style="color:var(--gray-500);font-size:.82rem;">Open, active, rejected and overdue requests · click a number to open matching tracker rows</span></div><div id="dashboard-developers"></div></div>
       </div>
       <!-- ── TRACKER SECTION ── -->
       <div id="section-tracker" style="display: flex; flex-direction: column; gap: 1.25rem;">
@@ -1252,6 +1238,10 @@
               <option value="">All Assigned Projects</option>
             </select>
 
+            <select id="filter-developer" class="filter-select" onchange="renderTable()">
+              <option value="">All Developers</option>
+            </select>
+
             <select id="filter-status" class="filter-select" onchange="renderTable()">
               <option value="">All Statuses</option>
               <option value="Open">Open</option>
@@ -1275,6 +1265,8 @@
           </div>
 
           <div class="action-group">
+            <span id="dashboard-drilldown-label" style="display:none;color:var(--primary);font-size:.8rem;"></span>
+            <button class="btn btn-secondary btn-sm" id="btn-clear-dashboard-drilldown" onclick="clearDashboardDrilldown()" style="display:none">Clear dashboard selection</button>
             <button class="btn btn-secondary btn-sm" onclick="exportFilteredCSV()" title="Export filtered records to CSV">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Export CSV
@@ -1666,6 +1658,8 @@
     let users = [];
     let projects = [];
     let activeTab = 'tracker';
+    let dashboardDrilldownRecordIds = null;
+    let dashboardDrilldownData = { metrics: new Map(), statuses: new Map(), developers: new Map() };
 
     let currentEditingRecordId = null;
     let currentEditingUserId = null;
@@ -1926,6 +1920,7 @@
 
       populateDepartmentFilter();
       populateProjectFilter();
+      populateDeveloperFilter();
       updateStats();
       renderTable();
       renderDashboard();
@@ -2002,11 +1997,70 @@
       if (tab === 'dashboard') renderDashboard();
     }
 
+    function applyDashboardDrilldown(drillRecords, developer, description) {
+      dashboardDrilldownRecordIds = new Set(drillRecords.map(record => record.id));
+      document.getElementById('filter-developer').value = developer || '';
+      document.getElementById('filter-dept').value = '';
+      document.getElementById('filter-project').value = '';
+      document.getElementById('filter-status').value = '';
+      document.getElementById('filter-type').value = '';
+      document.getElementById('search-box').value = '';
+      document.getElementById('dashboard-drilldown-label').textContent = `${description} · ${drillRecords.length} records`;
+      document.getElementById('dashboard-drilldown-label').style.display = 'inline';
+      document.getElementById('btn-clear-dashboard-drilldown').style.display = 'inline-flex';
+      currentPage = 1;
+      switchView('tracker');
+      renderTable();
+    }
+
+    function clearDashboardDrilldown() {
+      dashboardDrilldownRecordIds = null;
+      document.getElementById('filter-developer').value = '';
+      document.getElementById('filter-dept').value = '';
+      document.getElementById('filter-project').value = '';
+      document.getElementById('filter-status').value = '';
+      document.getElementById('filter-type').value = '';
+      document.getElementById('search-box').value = '';
+      document.getElementById('dashboard-drilldown-label').style.display = 'none';
+      document.getElementById('btn-clear-dashboard-drilldown').style.display = 'none';
+      currentPage = 1;
+      renderTable();
+    }
+
+    function handleDashboardDrilldown(button) {
+      if (button.dataset.drillDeveloper) {
+        const developer = button.dataset.drillDeveloper;
+        const metric = button.dataset.drillMetric;
+        const rows = dashboardDrilldownData.developers.get(developer) || [];
+        const activeStatuses = ['Open','In Progress','In Review','Testing'];
+        const filtered = metric === 'active' ? rows.filter(record => activeStatuses.includes(record.status))
+          : metric === 'rejected' ? rows.filter(record => record.status === 'Rejected')
+          : metric === 'overdue' ? rows.filter(record => isOverdue(record.expectedProdDate, record.status))
+          : metric === 'deployed' ? rows.filter(record => record.status === 'Deployed') : rows;
+        const labels = { total:'All', active:'Active', rejected:'Rejected', overdue:'Overdue', deployed:'Deployed' };
+        applyDashboardDrilldown(filtered, developer, `${developer} · ${labels[metric] || 'All'}`);
+        return;
+      }
+      const key = button.dataset.drillKey;
+      const isMetric = button.closest('#dashboard-metrics');
+      const rows = (isMetric ? dashboardDrilldownData.metrics : dashboardDrilldownData.statuses).get(key) || [];
+      const developer = document.getElementById('dashboard-developer').value;
+      const description = isMetric ? button.dataset.drillLabel : `${key} status`;
+      applyDashboardDrilldown(rows, developer, description);
+    }
+
+    function enableDashboardDrilldownProgress() {
+      document.querySelectorAll('#dashboard-metrics button[data-drill-key], #dashboard-status button[data-drill-key], #dashboard-developers button[data-drill-developer]').forEach(button => {
+        if (!button.dataset.progressWrapped) bindProgressHandler(button, () => handleDashboardDrilldown(button));
+      });
+    }
+
     async function refreshApplicationData() {
       try {
         await loadApplicationState();
         populateDepartmentFilter();
         populateProjectFilter();
+        populateDeveloperFilter();
         updateStats();
         renderTable();
         if (currentUser?.role === 'admin') { renderUsersList(); renderProjectsList(); }
@@ -2070,27 +2124,55 @@
       const rejectedCount = selected.filter(record => record.status === 'Rejected').length;
       const overdueCount = selected.filter(record => isOverdue(record.expectedProdDate, record.status)).length;
       const today = new Date(); today.setHours(0,0,0,0);
-      const dueSoonCount = selected.filter(record => {
+      const dueSoonRecords = selected.filter(record => {
         if (!ongoingStatuses.includes(record.status) || !record.expectedProdDate || isOverdue(record.expectedProdDate, record.status)) return false;
         const due = new Date(`${record.expectedProdDate}T00:00:00`);
         const remainingDays = Math.ceil((due - today) / 86400000);
         return remainingDays >= 0 && remainingDays <= 7;
-      }).length;
+      });
+      const dueSoonCount = dueSoonRecords.length;
       const completedForSla = selected.filter(record => record.status === 'Deployed' && record.expectedProdDate && record.prodDeployDate);
       const onTimeCount = completedForSla.filter(record => record.prodDeployDate <= record.expectedProdDate).length;
+      const onTimeRecords = completedForSla.filter(record => record.prodDeployDate <= record.expectedProdDate);
       const slaRate = completedForSla.length ? `${Math.round(onTimeCount / completedForSla.length * 100)}%` : '—';
-      const metrics = [['Requests',selected.length],['Ongoing',ongoingCount],['Active',activeCount],['Deployed',deployedCount],['Rejected',rejectedCount],['Overdue',overdueCount],['Due in 7 days',dueSoonCount],['SLA on time',slaRate]];
-      document.getElementById('dashboard-metrics').innerHTML = metrics.map(([label,value]) => `<div class="dashboard-metric"><strong>${value}</strong><span>${label}</span></div>`).join('');
+      const deployedWithDates = selected.filter(record => record.status === 'Deployed' && record.createdDate && record.prodDeployDate);
+      const cycleDays = deployedWithDates.map(record => Math.max(0, Math.round((new Date(`${record.prodDeployDate}T00:00:00`) - new Date(`${record.createdDate}T00:00:00`)) / 86400000)));
+      const averageCycleDays = cycleDays.length ? Math.round(cycleDays.reduce((sum, value) => sum + value, 0) / cycleDays.length) : null;
+      const metrics = [
+        ['requests','Requests',selected.length,selected],
+        ['ongoing','Ongoing',ongoingCount,selected.filter(record => ongoingStatuses.includes(record.status))],
+        ['active','Active',activeCount,selected.filter(record => activeStatuses.includes(record.status))],
+        ['deployed','Deployed',deployedCount,selected.filter(record => record.status === 'Deployed')],
+        ['rejected','Rejected',rejectedCount,selected.filter(record => record.status === 'Rejected')],
+        ['overdue','Overdue',overdueCount,selected.filter(record => isOverdue(record.expectedProdDate, record.status))],
+        ['due-soon','Due in 7 days',dueSoonCount,dueSoonRecords],
+        ['sla-on-time','SLA on time',slaRate,onTimeRecords],
+        ['cycle-time','Avg. delivery days',averageCycleDays === null ? '—' : averageCycleDays,deployedWithDates],
+      ];
+      dashboardDrilldownData.metrics = new Map(metrics.map(metric => [metric[0], metric[3]]));
+      document.getElementById('dashboard-metrics').innerHTML = metrics.map(([key,label,value]) => `<button type="button" class="dashboard-metric dashboard-drill-card" data-drill-key="${key}" data-drill-label="${escapeHTML(label)}"><strong>${value}</strong><span>${escapeHTML(label)}</span></button>`).join('');
 
       const statuses = [...new Set(['Open','In Progress','In Review','Testing','Deployed','Rejected', ...selected.map(record => record.status).filter(Boolean)])];
       const statusCounts = statuses.map(status => [status, selected.filter(record => record.status === status).length]);
       const maxStatus = Math.max(1, ...statusCounts.map(([,count]) => count));
-      document.getElementById('dashboard-status').innerHTML = statusCounts.map(([status,count]) => `<div class="status-row"><span>${escapeHTML(status)}</span><div class="status-track"><div class="status-fill" style="width:${count/maxStatus*100}%"></div></div><strong>${count}</strong></div>`).join('');
+      dashboardDrilldownData.statuses = new Map(statusCounts.map(([status]) => [status, selected.filter(record => record.status === status)]));
+      document.getElementById('dashboard-status').innerHTML = statusCounts.map(([status,count]) => `<div class="status-row"><span>${escapeHTML(status)}</span><div class="status-track"><div class="status-fill" style="width:${count/maxStatus*100}%"></div></div><strong><button type="button" class="dashboard-drill" data-drill-key="${escapeHTML(status)}" title="Show ${count} ${escapeHTML(status)} records in Tracker">${count}</button></strong></div>`).join('');
+
+      const requestTypes = new Map();
+      selected.forEach(record => { const key = String(record.requestType || 'Unspecified').trim() || 'Unspecified'; requestTypes.set(key, (requestTypes.get(key) || 0) + 1); });
+      const typeRows = [...requestTypes.entries()].sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0]));
+      const maxType = Math.max(1, ...typeRows.map(([,count]) => count));
+      document.getElementById('dashboard-request-types').innerHTML = typeRows.length ? typeRows.map(([type,count]) => `<div class="status-row"><span>${escapeHTML(type)}</span><div class="status-track"><div class="status-fill" style="width:${count/maxType*100}%"></div></div><strong>${count}</strong></div>`).join('') : '<p style="color:var(--gray-500)">No requests for this selection.</p>';
+
+      const departmentGroups = new Map();
+      selected.forEach(record => { const name = String(record.department || 'Unspecified').trim() || 'Unspecified'; departmentGroups.set(name, [...(departmentGroups.get(name) || []), record]); });
+      const departmentRows = [...departmentGroups.entries()].sort((a,b) => b[1].length-a[1].length || a[0].localeCompare(b[0]));
+      document.getElementById('dashboard-departments').innerHTML = departmentRows.length ? `<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Department</th><th>Total</th><th>Active</th><th>Rejected</th><th>Overdue</th><th>Deployed</th></tr></thead><tbody>${departmentRows.map(([name,items]) => `<tr><td>${escapeHTML(name)}</td><td>${items.length}</td><td>${items.filter(record => activeStatuses.includes(record.status)).length}</td><td>${items.filter(record => record.status === 'Rejected').length}</td><td>${items.filter(record => isOverdue(record.expectedProdDate,record.status)).length}</td><td>${items.filter(record => record.status === 'Deployed').length}</td></tr>`).join('')}</tbody></table></div>` : '<p style="color:var(--gray-500)">No requests for this selection.</p>';
 
       const slaPct = completedForSla.length ? Math.round(onTimeCount / completedForSla.length * 100) : 0;
       const slaMetrics = [['On time',onTimeCount],['Late',completedForSla.length-onTimeCount],['Eligible completed',completedForSla.length]];
       document.getElementById('dashboard-sla').innerHTML = slaMetrics.map(([label,value]) => `<div class="dashboard-metric"><strong>${value}</strong><span>${label}</span></div>`).join('') + `<div class="dashboard-metric"><strong>${completedForSla.length ? `${slaPct}%` : '—'}</strong><span>On-time rate</span></div>`;
-      document.getElementById('dashboard-sla-note').textContent = `SLA is evaluated only for deployed or closed requests with both expected and actual production dates (${completedForSla.length} eligible in this selection).`;
+      document.getElementById('dashboard-sla-note').textContent = `SLA is evaluated for deployed requests with both expected and actual production dates (${completedForSla.length} eligible). Average delivery time uses ${deployedWithDates.length} deployed requests with creation and deployment dates.`;
 
       const ageBuckets = [['0–7 days',0],['8–14 days',0],['15–30 days',0],['31+ days',0]];
       selected.filter(record => ongoingStatuses.includes(record.status) && record.createdDate).forEach(record => {
@@ -2104,8 +2186,8 @@
 
       const monthly = Array.from({length:12}, (_, index) => {
         const monthNumber = index + 1;
-        const created = records.filter(record => (!selectedDeveloper || record.developer === selectedDeveloper) && String(record.createdDate || '').slice(0,4) === String(year) && Number(String(record.createdDate || '').slice(5,7)) === monthNumber).length;
-        const deployed = records.filter(record => (!selectedDeveloper || record.developer === selectedDeveloper) && String(record.prodDeployDate || '').slice(0,4) === String(year) && Number(String(record.prodDeployDate || '').slice(5,7)) === monthNumber).length;
+        const created = records.filter(record => (!selectedDeveloper || String(record.developer || '').trim() === selectedDeveloper) && String(record.createdDate || '').slice(0,4) === String(year) && Number(String(record.createdDate || '').slice(5,7)) === monthNumber).length;
+        const deployed = records.filter(record => (!selectedDeveloper || String(record.developer || '').trim() === selectedDeveloper) && String(record.prodDeployDate || '').slice(0,4) === String(year) && Number(String(record.prodDeployDate || '').slice(5,7)) === monthNumber).length;
         return { month: new Date(year, index, 1).toLocaleDateString('en', {month:'short'}), created, deployed };
       });
       const maxVolume = Math.max(1, ...monthly.flatMap(item => [item.created,item.deployed]));
@@ -2114,7 +2196,10 @@
       const grouped = new Map();
       inPeriod.forEach(record => { const name = String(record.developer || 'Unassigned').trim() || 'Unassigned'; if (!selectedDeveloper || name === selectedDeveloper) grouped.set(name, [...(grouped.get(name) || []), record]); });
       const rows = [...grouped.entries()].sort((a,b) => b[1].length-a[1].length || a[0].localeCompare(b[0]));
-      document.getElementById('dashboard-developers').innerHTML = rows.length ? `<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Developer</th><th>Total</th><th>Active</th><th>Rejected</th><th>Overdue</th><th>Deployed</th></tr></thead><tbody>${rows.map(([name,items]) => `<tr><td>${escapeHTML(name)}</td><td>${items.length}</td><td>${items.filter(r=>['Open','In Progress','In Review','Testing'].includes(r.status)).length}</td><td>${items.filter(r=>r.status==='Rejected').length}</td><td>${items.filter(r=>isOverdue(r.expectedProdDate,r.status)).length}</td><td>${items.filter(r=>r.status==='Deployed').length}</td></tr>`).join('')}</tbody></table></div>` : '<p style="color:var(--gray-500);padding:.75rem 0">No requests for this selection.</p>';
+      dashboardDrilldownData.developers = new Map(rows);
+      const countButton = (name, metric, count) => `<button type="button" class="dashboard-drill" data-drill-developer="${escapeHTML(name)}" data-drill-metric="${metric}" title="Show ${count} ${escapeHTML(metric)} records for ${escapeHTML(name)} in Tracker">${count}</button>`;
+      document.getElementById('dashboard-developers').innerHTML = rows.length ? `<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Developer</th><th>Total</th><th>Active</th><th>Rejected</th><th>Overdue</th><th>Deployed</th></tr></thead><tbody>${rows.map(([name,items]) => `<tr><td>${countButton(name,'total',escapeHTML(name))}</td><td>${countButton(name,'total',items.length)}</td><td>${countButton(name,'active',items.filter(r=>['Open','In Progress','In Review','Testing'].includes(r.status)).length)}</td><td>${countButton(name,'rejected',items.filter(r=>r.status==='Rejected').length)}</td><td>${countButton(name,'overdue',items.filter(r=>isOverdue(r.expectedProdDate,r.status)).length)}</td><td>${countButton(name,'deployed',items.filter(r=>r.status==='Deployed').length)}</td></tr>`).join('')}</tbody></table></div>` : '<p style="color:var(--gray-500);padding:.75rem 0">No requests for this selection.</p>';
+      enableDashboardDrilldownProgress();
     }
 
     /* ── Search & Filter Logic ── */
@@ -2156,6 +2241,14 @@
       if (projects.some(project => project.id === currentValue)) select.value = currentValue;
     }
 
+    function populateDeveloperFilter() {
+      const select = document.getElementById('filter-developer');
+      const currentValue = select.value;
+      const names = [...new Set(records.map(record => String(record.developer || '').trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b));
+      select.innerHTML = '<option value="">All Developers</option>' + names.map(name => `<option value="${escapeHTML(name)}">${escapeHTML(name)}</option>`).join('');
+      if (names.includes(currentValue)) select.value = currentValue;
+    }
+
     function populateRecordProjectOptions(selectedId = '') {
       const select = document.getElementById('rec-project');
       select.innerHTML = '<option value="">Select project...</option>' + projects
@@ -2168,12 +2261,15 @@
       const searchTerm = document.getElementById('search-box').value.trim().toLowerCase();
       const deptFilter = document.getElementById('filter-dept').value;
       const projectFilter = document.getElementById('filter-project').value;
+      const developerFilter = document.getElementById('filter-developer').value;
       const statusFilter = document.getElementById('filter-status').value;
       const typeFilter = document.getElementById('filter-type').value;
 
       return records.filter(r => {
+        if (dashboardDrilldownRecordIds && !dashboardDrilldownRecordIds.has(r.id)) return false;
         if (deptFilter && r.department !== deptFilter) return false;
         if (projectFilter && r.projectId !== projectFilter) return false;
+        if (developerFilter && String(r.developer || '').trim() !== developerFilter) return false;
         if (statusFilter && r.status !== statusFilter) return false;
         if (typeFilter && r.requestType !== typeFilter) return false;
 
@@ -2493,6 +2589,7 @@
       showToast(currentEditingRecordId ? 'Record updated successfully' : 'Record created successfully', 'success');
       closeModal('modal-record');
       populateDepartmentFilter();
+      populateDeveloperFilter();
       updateStats();
       renderTable();
       renderDashboard();
@@ -2519,6 +2616,7 @@
         closeModal('modal-confirm');
         showToast('Record removed from the active tracker', 'success');
         populateDepartmentFilter();
+        populateDeveloperFilter();
         updateStats();
         renderTable();
         renderDashboard();
@@ -2886,7 +2984,7 @@
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.setAttribute('href', url);
-      link.setAttribute('download', `DevTracker_Export_${new Date().toISOString().split('T')[0]}.csv`);
+      link.setAttribute('download', `Tracker_Export_${new Date().toISOString().split('T')[0]}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
