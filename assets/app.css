@@ -55,6 +55,10 @@
       flex-direction: column;
     }
 
+    @view-transition { navigation: auto; }
+    ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 160ms; }
+    .startup-error-view { min-height:100vh; align-items:center; justify-content:center; padding:1.5rem; }
+
     /* Accessibility utility */
     .sr-only {
       position: absolute;
@@ -488,6 +492,8 @@
       flex-direction: column;
       gap: 1.25rem;
     }
+
+    .portal-main { max-width:1700px; gap:1.25rem; }
 
     /* Stat Cards */
     .stats-grid {

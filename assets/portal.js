@@ -241,14 +241,31 @@
     window.location.href = '/';
   };
 
+  window.portalRetry = () => window.location.reload();
+
+  function showPortalError(error) {
+    const target = document.getElementById('portal-error');
+    target.hidden = false;
+    target.textContent = `Could not load this page: ${error.message}`;
+    const retry = document.createElement('button');
+    retry.className = 'btn btn-secondary btn-sm';
+    retry.type = 'button';
+    retry.textContent = 'Retry';
+    retry.style.marginTop = '.75rem';
+    retry.addEventListener('click', window.portalRetry);
+    target.appendChild(retry);
+  }
+
   async function boot() {
     try {
       const sessionResponse = await apiFetch('/api/session');
-      if (!sessionResponse.ok) { window.location.href = `/?return=${encodeURIComponent(window.location.pathname)}`; return; }
-      const session = await sessionResponse.json();
+      if (sessionResponse.status === 401) { window.location.href = `/?return=${encodeURIComponent(window.location.pathname)}`; return; }
+      const session = await sessionResponse.json().catch(() => ({}));
+      if (!sessionResponse.ok || !session.success || !session.user) throw new Error(session.error || `Session check failed (${sessionResponse.status})`);
       user = session.user;
       const stateResponse = await apiFetch(page === 'my-tracker' ? '/api/state?scope=my-tracker' : '/api/state');
-      const state = await stateResponse.json();
+      if (stateResponse.status === 401) { window.location.href = `/?return=${encodeURIComponent(window.location.pathname)}`; return; }
+      const state = await stateResponse.json().catch(() => ({}));
       if (!stateResponse.ok || !state.success) throw new Error(state.error || 'Unable to load tracker records');
       const projects = state.state.projects || [];
       const projectMap = new Map(projects.map(project => [project.id, project.name]));
@@ -262,9 +279,7 @@
       } else if (page === 'support') renderSupport();
       else if (page === 'my-tracker') renderMyTracker();
     } catch (error) {
-      const target = document.getElementById('portal-error');
-      target.hidden = false;
-      target.textContent = `Could not load this page: ${error.message}`;
+      showPortalError(error);
     }
   }
   document.addEventListener('DOMContentLoaded', boot);

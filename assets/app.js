@@ -244,17 +244,41 @@
     /* ── Authentication & Session ── */
     async function checkAuthSession() {
       const response = await appFetch('/api/session', { headers: { Accept: 'application/json' } });
-      if (!response.ok) {
+      if (response.status === 401) {
         showLoginView();
-        return;
+        return false;
+      }
+      if (!response.ok) {
+        const failure = await response.json().catch(() => ({}));
+        throw new Error(failure.error || `Session check failed (${response.status})`);
       }
       const result = await response.json();
+      if (!result.success || !result.user) throw new Error(result.error || 'The session response was incomplete');
       currentUser = result.user;
       await loadApplicationState();
       showAppView();
+      return true;
+    }
+
+    function showStartupError(error) {
+      document.getElementById('view-login').style.display = 'none';
+      document.getElementById('view-app').style.display = 'none';
+      document.getElementById('view-startup-error').style.display = 'flex';
+      document.getElementById('startup-error-message').textContent = error?.message || 'Could not connect to the tracker service.';
+    }
+
+    async function retryApplicationStartup() {
+      try {
+        await initializeDatabase();
+        await checkAuthSession();
+      } catch (error) {
+        showStartupError(error);
+      }
     }
 
     function showLoginView() {
+      currentUser = null;
+      document.getElementById('view-startup-error').style.display = 'none';
       document.getElementById('view-login').style.display = 'flex';
       document.getElementById('view-app').style.display = 'none';
       document.getElementById('input-email').value = '';
@@ -265,6 +289,7 @@
     function showAppView() {
       const returnTo = new URLSearchParams(window.location.search).get('return');
       if (['/dashboard.html', '/support.html', '/my-tracker.html'].includes(returnTo)) { window.location.replace(returnTo); return; }
+      document.getElementById('view-startup-error').style.display = 'none';
       document.getElementById('view-login').style.display = 'none';
       document.getElementById('view-app').style.display = 'flex';
 
@@ -342,8 +367,11 @@
         showToast(`Welcome back, ${currentUser.name}!`, 'success');
         showAppView();
       } catch (error) {
-        alertEl.textContent = `Database sign-in failed: ${error.message}`;
-        alertEl.style.display = 'block';
+        if (currentUser) showStartupError(error);
+        else {
+          alertEl.textContent = `Database sign-in failed: ${error.message}`;
+          alertEl.style.display = 'block';
+        }
       } finally {
         finishProgress();
       }
@@ -1430,9 +1458,6 @@
         await checkAuthSession();
       } catch (error) {
         console.error('Database initialization failed:', error);
-        showLoginView();
-        const alertEl = document.getElementById('login-alert');
-        alertEl.textContent = `Could not connect to PostgreSQL: ${error.message}`;
-        alertEl.style.display = 'block';
+        showStartupError(error);
       }
     });

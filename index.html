@@ -8,6 +8,14 @@
 </head>
 <body>
 
+  <section id="view-startup-error" class="startup-error-view" aria-live="polite" style="display:none">
+    <div class="login-box">
+      <div class="login-header"><div class="brand-icon">!</div><div><h1>Tracker temporarily unavailable</h1><p>We could not restore your session or load tracker data. Your session has not been signed out.</p></div></div>
+      <div class="login-alert" id="startup-error-message" role="alert" style="display:block"></div>
+      <button class="btn btn-primary" id="retry-startup" onclick="retryApplicationStartup()" style="width:100%;margin-top:.5rem;padding:.65rem">Retry connection</button>
+    </div>
+  </section>
+
   <!-- ═══════════════════════════════════════
        1. LOGIN PAGE
   ═══════════════════════════════════════ -->
