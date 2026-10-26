@@ -8,7 +8,7 @@ const { AsyncLocalStorage } = require('node:async_hooks');
 
 const scrypt = promisify(crypto.scrypt);
 
-const PORT = Number(process.env.PORT || 8080);
+const PORT = Number(process.env.PORT || 9011);
 const ROOT = __dirname;
 const required = [
   'DB_API_KEY',
@@ -149,6 +149,31 @@ function publicUser(user) {
   return { id: user.id, name: user.name, email: user.email, role: user.role, projectIds: Array.isArray(user.projectIds) ? user.projectIds : [] };
 }
 
+function stateForUser(user, state, scope = '') {
+  const assignedProjectIds = new Set(user.projectIds || []);
+  const myTrackerScope = scope === 'my-tracker';
+  const identity = new Set([user.id, user.name, user.email].map((value) => String(value || '').trim().toLowerCase()).filter(Boolean));
+  const records = state.records.filter((record) => {
+    if (myTrackerScope) {
+      const isNamedAssignee = [record.developer, record.owner, record.approverName, record.businessApproverName, record.businessApprover].some((value) => {
+        const normalized = String(value || '').trim().toLowerCase();
+        return normalized && identity.has(normalized);
+      });
+      return record.createdBy === user.id || record.developerUserId === user.id || record.ownerUserId === user.id || isNamedAssignee;
+    }
+    if (user.role === 'admin') return true;
+    if (assignedProjectIds.has(record.projectId)) return true;
+    return false;
+  });
+  const visibleProjectIds = user.role === 'admin' ? null : new Set([...assignedProjectIds, ...records.map((record) => record.projectId).filter(Boolean)]);
+  return {
+    users: user.role === 'admin' ? state.users.map(publicUser) : [],
+    records,
+    projects: user.role === 'admin' ? state.projects : state.projects.filter((project) => visibleProjectIds.has(project.id)),
+    needsMigration: user.role === 'admin' && Boolean(state.needsMigration),
+  };
+}
+
 async function readJsonBody(req, maxBytes = 1024 * 1024) {
   const chunks = [];
   let size = 0;
@@ -243,8 +268,11 @@ async function writeRelationalState(state, previousState = null) {
   }
   for (const record of (Array.isArray(state.records) ? state.records : [])) {
     const normalizedRecord = { ...record, status: normalizeTrackerStatus(record.status) };
-    if (previousState && sameFields(normalizedRecord, previousRecords.get(record.id), ['projectId', 'trackerNo', 'department', 'subject', 'requestType', 'developer', 'status', 'owner', 'changeRisk', 'impactedBusinessArea', 'remediationStrategy', 'comment', 'expectedProdDate', 'prodDeployDate', 'businessApprovalDate', 'releasePR', 'featureBranch', 'createdDate', 'updatedAt', 'sfdcStatus'])) continue;
-    await databaseQuery('INSERT INTO support_tracker_records (record_id, project_id, tracker_no, department, subject, request_type, developer, status, owner, change_risk, impacted_business_area, remediation_strategy, deployment_comment, expected_prod_date, prod_deploy_date, business_approval_date, release_pr, feature_branch, created_date, updated_at, sfdc_status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) ON CONFLICT (record_id) DO UPDATE SET project_id = EXCLUDED.project_id, tracker_no = EXCLUDED.tracker_no, department = EXCLUDED.department, subject = EXCLUDED.subject, request_type = EXCLUDED.request_type, developer = EXCLUDED.developer, status = EXCLUDED.status, owner = EXCLUDED.owner, change_risk = EXCLUDED.change_risk, impacted_business_area = EXCLUDED.impacted_business_area, remediation_strategy = EXCLUDED.remediation_strategy, deployment_comment = EXCLUDED.deployment_comment, expected_prod_date = EXCLUDED.expected_prod_date, prod_deploy_date = EXCLUDED.prod_deploy_date, business_approval_date = EXCLUDED.business_approval_date, release_pr = EXCLUDED.release_pr, feature_branch = EXCLUDED.feature_branch, created_date = EXCLUDED.created_date, updated_at = EXCLUDED.updated_at, sfdc_status = EXCLUDED.sfdc_status', [record.id, record.projectId || null, record.trackerNo, record.department, record.subject, record.requestType, record.developer, normalizedRecord.status, record.owner || null, record.changeRisk || null, record.impactedBusinessArea || null, record.remediationStrategy || null, record.comment || null, record.expectedProdDate || null, record.prodDeployDate || null, record.businessApprovalDate || null, record.releasePR || null, record.featureBranch || null, record.createdDate || null, record.updatedAt || null, record.sfdcStatus || null]);
+    const timeSpentMinutes = Number.isFinite(Number(record.timeSpentMinutes)) ? Math.max(0, Math.floor(Number(record.timeSpentMinutes))) : 0;
+    const hourlyRate = Number.isFinite(Number(record.hourlyRate)) ? Math.max(0, Number(record.hourlyRate)) : 0;
+    if (previousState && sameFields(normalizedRecord, previousRecords.get(record.id), ['projectId', 'trackerNo', 'department', 'subject', 'requestType', 'developer', 'status', 'owner', 'changeRisk', 'impactedBusinessArea', 'remediationStrategy', 'comment', 'expectedProdDate', 'prodDeployDate', 'businessApprovalDate', 'releasePR', 'featureBranch', 'createdDate', 'updatedAt', 'sfdcStatus', 'customerAccount', 'customerContact', 'supportChannel', 'priority', 'category', 'slaDueDate', 'contractName', 'timeSpentMinutes', 'hourlyRate', 'createdBy'])) continue;
+    await databaseQuery('INSERT INTO support_tracker_records (record_id, project_id, tracker_no, department, subject, request_type, developer, status, owner, change_risk, impacted_business_area, remediation_strategy, deployment_comment, expected_prod_date, prod_deploy_date, business_approval_date, release_pr, feature_branch, created_date, updated_at, sfdc_status, customer_account, customer_contact, support_channel, priority, category, sla_due_date, contract_name, time_spent_minutes, hourly_rate, created_by_user_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31) ON CONFLICT (record_id) DO UPDATE SET project_id = EXCLUDED.project_id, tracker_no = EXCLUDED.tracker_no, department = EXCLUDED.department, subject = EXCLUDED.subject, request_type = EXCLUDED.request_type, developer = EXCLUDED.developer, status = EXCLUDED.status, owner = EXCLUDED.owner, change_risk = EXCLUDED.change_risk, impacted_business_area = EXCLUDED.impacted_business_area, remediation_strategy = EXCLUDED.remediation_strategy, deployment_comment = EXCLUDED.deployment_comment, expected_prod_date = EXCLUDED.expected_prod_date, prod_deploy_date = EXCLUDED.prod_deploy_date, business_approval_date = EXCLUDED.business_approval_date, release_pr = EXCLUDED.release_pr, feature_branch = EXCLUDED.feature_branch, created_date = EXCLUDED.created_date, updated_at = EXCLUDED.updated_at, sfdc_status = EXCLUDED.sfdc_status, customer_account = EXCLUDED.customer_account, customer_contact = EXCLUDED.customer_contact, support_channel = EXCLUDED.support_channel, priority = EXCLUDED.priority, category = EXCLUDED.category, sla_due_date = EXCLUDED.sla_due_date, contract_name = EXCLUDED.contract_name, time_spent_minutes = EXCLUDED.time_spent_minutes, hourly_rate = EXCLUDED.hourly_rate, created_by_user_id = COALESCE(support_tracker_records.created_by_user_id, EXCLUDED.created_by_user_id)', [record.id, record.projectId || null, record.trackerNo, record.department, record.subject, record.requestType, record.developer, normalizedRecord.status, record.owner || null, record.changeRisk || null, record.impactedBusinessArea || null, record.remediationStrategy || null, record.comment || null, record.expectedProdDate || null, record.prodDeployDate || null, record.businessApprovalDate || null, record.releasePR || null, record.featureBranch || null, record.createdDate || null, record.updatedAt || null, record.sfdcStatus || null, record.customerAccount || null, record.customerContact || null, record.supportChannel || null, record.priority || null, record.category || null, record.slaDueDate || null, record.contractName || null, timeSpentMinutes, hourlyRate, record.createdBy || null]);
+    await databaseQuery('UPDATE support_tracker_records SET developer_user_id = (SELECT user_id FROM support_tracker_users WHERE LOWER(name) = LOWER($2) OR LOWER(email) = LOWER($2) ORDER BY CASE WHEN LOWER(name) = LOWER($2) THEN 0 ELSE 1 END LIMIT 1), owner_user_id = (SELECT user_id FROM support_tracker_users WHERE LOWER(name) = LOWER($3) OR LOWER(email) = LOWER($3) ORDER BY CASE WHEN LOWER(name) = LOWER($3) THEN 0 ELSE 1 END LIMIT 1) WHERE record_id = $1', [record.id, record.developer || '', record.owner || '']);
   }
 }
 
@@ -265,6 +293,23 @@ async function ensureStateTable() {
       await databaseQuery('ALTER TABLE support_tracker_records ADD COLUMN IF NOT EXISTS remediation_strategy TEXT', []);
       await databaseQuery('ALTER TABLE support_tracker_records ADD COLUMN IF NOT EXISTS deployment_comment TEXT', []);
       await databaseQuery('ALTER TABLE support_tracker_records ADD COLUMN IF NOT EXISTS feature_branch TEXT', []);
+      await databaseQuery('ALTER TABLE support_tracker_records ADD COLUMN IF NOT EXISTS customer_account TEXT', []);
+      await databaseQuery('ALTER TABLE support_tracker_records ADD COLUMN IF NOT EXISTS customer_contact TEXT', []);
+      await databaseQuery('ALTER TABLE support_tracker_records ADD COLUMN IF NOT EXISTS support_channel TEXT', []);
+      await databaseQuery('ALTER TABLE support_tracker_records ADD COLUMN IF NOT EXISTS priority TEXT', []);
+      await databaseQuery('ALTER TABLE support_tracker_records ADD COLUMN IF NOT EXISTS category TEXT', []);
+      await databaseQuery('ALTER TABLE support_tracker_records ADD COLUMN IF NOT EXISTS sla_due_date DATE', []);
+      await databaseQuery('ALTER TABLE support_tracker_records ADD COLUMN IF NOT EXISTS contract_name TEXT', []);
+      await databaseQuery('ALTER TABLE support_tracker_records ADD COLUMN IF NOT EXISTS time_spent_minutes INTEGER NOT NULL DEFAULT 0', []);
+      await databaseQuery('ALTER TABLE support_tracker_records ADD COLUMN IF NOT EXISTS hourly_rate NUMERIC NOT NULL DEFAULT 0', []);
+      await databaseQuery('ALTER TABLE support_tracker_records ADD COLUMN IF NOT EXISTS created_by_user_id TEXT REFERENCES support_tracker_users(user_id)', []);
+      await databaseQuery('ALTER TABLE support_tracker_records ADD COLUMN IF NOT EXISTS developer_user_id TEXT REFERENCES support_tracker_users(user_id)', []);
+      await databaseQuery('ALTER TABLE support_tracker_records ADD COLUMN IF NOT EXISTS owner_user_id TEXT REFERENCES support_tracker_users(user_id)', []);
+      await databaseQuery('CREATE INDEX IF NOT EXISTS support_tracker_records_created_by_idx ON support_tracker_records (created_by_user_id)', []);
+      await databaseQuery('CREATE INDEX IF NOT EXISTS support_tracker_records_developer_user_idx ON support_tracker_records (developer_user_id)', []);
+      await databaseQuery('CREATE INDEX IF NOT EXISTS support_tracker_records_owner_user_idx ON support_tracker_records (owner_user_id)', []);
+      await databaseQuery('UPDATE support_tracker_records r SET developer_user_id = (SELECT user_id FROM support_tracker_users WHERE LOWER(name) = LOWER(r.developer) OR LOWER(email) = LOWER(r.developer) ORDER BY CASE WHEN LOWER(name) = LOWER(r.developer) THEN 0 ELSE 1 END LIMIT 1) WHERE developer_user_id IS NULL', []);
+      await databaseQuery('UPDATE support_tracker_records r SET owner_user_id = (SELECT user_id FROM support_tracker_users WHERE LOWER(name) = LOWER(r.owner) OR LOWER(email) = LOWER(r.owner) ORDER BY CASE WHEN LOWER(name) = LOWER(r.owner) THEN 0 ELSE 1 END LIMIT 1) WHERE owner_user_id IS NULL AND owner IS NOT NULL', []);
       await databaseQuery('CREATE TABLE IF NOT EXISTS support_tracker_app_metadata (metadata_key TEXT PRIMARY KEY, metadata_value TEXT NOT NULL)', []);
       await databaseQuery('ALTER TABLE support_tracker_users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE', []);
       await databaseQuery('ALTER TABLE support_tracker_projects ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE', []);
@@ -333,7 +378,7 @@ async function readAppState() {
     databaseQuery('SELECT user_id, name, email, role, password_hash FROM support_tracker_users WHERE is_active = TRUE ORDER BY name', []),
     databaseQuery('SELECT project_id, name, project_type, start_date, end_date FROM support_tracker_projects WHERE is_active = TRUE ORDER BY name', []),
     databaseQuery('SELECT up.user_id, up.project_id FROM support_tracker_user_projects up JOIN support_tracker_users u ON u.user_id = up.user_id AND u.is_active = TRUE JOIN support_tracker_projects p ON p.project_id = up.project_id AND p.is_active = TRUE', []),
-    databaseQuery('SELECT record_id, project_id, tracker_no, department, subject, request_type, developer, status, owner, change_risk, impacted_business_area, remediation_strategy, deployment_comment, expected_prod_date, prod_deploy_date, business_approval_date, release_pr, feature_branch, created_date, updated_at, sfdc_status FROM support_tracker_records WHERE is_active = TRUE ORDER BY created_date DESC NULLS LAST', []),
+    databaseQuery('SELECT record_id, project_id, tracker_no, department, subject, request_type, developer, status, owner, change_risk, impacted_business_area, remediation_strategy, deployment_comment, expected_prod_date, prod_deploy_date, business_approval_date, release_pr, feature_branch, created_date, updated_at, sfdc_status, customer_account, customer_contact, support_channel, priority, category, sla_due_date, contract_name, time_spent_minutes, hourly_rate, created_by_user_id, developer_user_id, owner_user_id FROM support_tracker_records WHERE is_active = TRUE ORDER BY created_date DESC NULLS LAST', []),
     databaseQuery('SELECT metadata_value FROM support_tracker_app_metadata WHERE metadata_key = $1', ['needs_migration']),
   ]);
   const value = (row, key) => row[key] ?? row[key.toUpperCase()];
@@ -348,12 +393,18 @@ async function readAppState() {
   const projects = resultRows(projectsResult).map((row) => ({ id: value(row, 'project_id'), name: value(row, 'name'), type: value(row, 'project_type'), startDate: date(value(row, 'start_date')), endDate: date(value(row, 'end_date')) }));
   const records = resultRows(recordsResult).map((row) => ({
     id: value(row, 'record_id'), projectId: value(row, 'project_id') || '', trackerNo: value(row, 'tracker_no'), department: value(row, 'department'), subject: value(row, 'subject'),
-    requestType: value(row, 'request_type'), developer: value(row, 'developer'), status: normalizeTrackerStatus(value(row, 'status')), owner: value(row, 'owner') || '',
+    requestType: value(row, 'request_type'), developer: value(row, 'developer'), status: normalizeTrackerStatus(value(row, 'status')), owner: value(row, 'owner') || '', businessApproverName: value(row, 'owner') || '',
     changeRisk: value(row, 'change_risk') || '', impactedBusinessArea: value(row, 'impacted_business_area') || '',
     remediationStrategy: value(row, 'remediation_strategy') || '', comment: value(row, 'deployment_comment') || '',
     expectedProdDate: date(value(row, 'expected_prod_date')), prodDeployDate: date(value(row, 'prod_deploy_date')),
     businessApprovalDate: date(value(row, 'business_approval_date')), releasePR: value(row, 'release_pr') || '', featureBranch: value(row, 'feature_branch') || '',
     createdDate: date(value(row, 'created_date')), updatedAt: date(value(row, 'updated_at')), sfdcStatus: value(row, 'sfdc_status') || '',
+    customerAccount: value(row, 'customer_account') || '', customerContact: value(row, 'customer_contact') || '',
+    supportChannel: value(row, 'support_channel') || '', priority: value(row, 'priority') || '', category: value(row, 'category') || '',
+    slaDueDate: date(value(row, 'sla_due_date')), contractName: value(row, 'contract_name') || '',
+    timeSpentMinutes: Number(value(row, 'time_spent_minutes') || 0), hourlyRate: Number(value(row, 'hourly_rate') || 0),
+    createdBy: value(row, 'created_by_user_id') || '',
+    developerUserId: value(row, 'developer_user_id') || '', ownerUserId: value(row, 'owner_user_id') || '',
   }));
   const migration = resultRows(migrationResult)[0];
   return { users, records, projects, needsMigration: String(value(migration || {}, 'metadata_value')) === 'true' };
@@ -370,15 +421,18 @@ async function writeAppState(state, previousState = null) {
 async function authenticatedUser(req) {
   const token = sessionToken(req);
   if (!token) return null;
-  const sessionResult = await databaseQuery(
-    'SELECT user_id FROM support_tracker_sessions WHERE token_hash = $1 AND expires_at > NOW()',
-    [hashSessionToken(token)],
-  );
-  const sessionRow = resultRows(sessionResult)[0];
-  const userId = sessionRow?.user_id ?? sessionRow?.USER_ID;
-  if (!userId) return null;
-  const state = await readAppState();
-  return state?.users?.find((user) => user.id === userId) || null;
+  const sessionUser = resultRows(await databaseQuery(
+    'UPDATE support_tracker_sessions s SET expires_at = NOW() + ($2 * INTERVAL \'1 second\') FROM support_tracker_users u WHERE s.token_hash = $1 AND s.expires_at > NOW() AND u.user_id = s.user_id AND u.is_active = TRUE RETURNING u.user_id, u.name, u.email, u.role',
+    [hashSessionToken(token), SESSION_TTL_SECONDS],
+  ))[0];
+  if (!sessionUser) return null;
+  const value = (key) => sessionUser[key] ?? sessionUser[key.toUpperCase()];
+  const user = { id: value('user_id'), name: value('name'), email: value('email'), role: value('role'), projectIds: [] };
+  if (user.role !== 'admin') {
+    const assignments = resultRows(await databaseQuery('SELECT up.project_id FROM support_tracker_user_projects up JOIN support_tracker_projects p ON p.project_id = up.project_id AND p.is_active = TRUE WHERE up.user_id = $1', [user.id]));
+    user.projectIds = assignments.map((row) => row.project_id ?? row.PROJECT_ID).filter(Boolean);
+  }
+  return user;
 }
 
 async function createServerSession(userId) {
@@ -519,6 +573,19 @@ const server = http.createServer((req, res) => requestContext.run(databaseDevice
       return sendJson(res, 200, { success: true, user: publicUser(user) });
     } catch (error) {
       return sendJson(res, error.statusCode || 502, { success: false, error: error.message || 'Login failed' });
+    }
+  }
+
+  if (new URL(req.url, 'http://localhost').pathname === '/api/bootstrap' && req.method === 'GET') {
+    try {
+      const user = await authenticatedUser(req);
+      if (!user) return sendJson(res, 401, { success: false, error: 'Session expired' });
+      const state = await readAppState();
+      const scope = new URL(req.url, 'http://localhost').searchParams.get('scope') || '';
+      setSessionCookie(req, res, sessionToken(req), SESSION_TTL_SECONDS);
+      return sendJson(res, 200, { success: true, user: publicUser(user), state: stateForUser(user, state, scope) });
+    } catch (error) {
+      return sendJson(res, error.statusCode || 503, { success: false, error: error.message || 'Could not load tracker data' });
     }
   }
 
@@ -671,21 +738,15 @@ const server = http.createServer((req, res) => requestContext.run(databaseDevice
     }
   }
 
-  if (req.url === '/api/state' && (req.method === 'GET' || req.method === 'PUT')) {
+  if (new URL(req.url, 'http://localhost').pathname === '/api/state' && (req.method === 'GET' || req.method === 'PUT')) {
     try {
       const user = await authenticatedUser(req);
       if (!user) return sendJson(res, 401, { success: false, error: 'Sign in required' });
       if (req.method === 'GET') {
         const state = await readAppState();
-        const assignedProjectIds = new Set(user.projectIds || []);
         return sendJson(res, 200, {
           success: true,
-          state: {
-            users: user.role === 'admin' ? state.users.map(publicUser) : [],
-            records: user.role === 'admin' ? state.records : state.records.filter((record) => assignedProjectIds.has(record.projectId)),
-            projects: user.role === 'admin' ? state.projects : state.projects.filter((project) => assignedProjectIds.has(project.id)),
-            needsMigration: user.role === 'admin' && Boolean(state.needsMigration),
-          },
+          state: stateForUser(user, state, new URL(req.url, 'http://localhost').searchParams.get('scope') || ''),
         });
       }
 
@@ -700,7 +761,9 @@ const server = http.createServer((req, res) => requestContext.run(databaseDevice
         ? normalizeProjects(state.projects === undefined ? currentState.projects || [] : state.projects)
         : currentState.projects || [];
       for (const candidate of state.records) {
+        if (!candidate || typeof candidate !== 'object') return sendJson(res, 400, { success: false, error: 'Every tracker record must be an object' });
         const existingRecord = currentState.records.find((record) => record.id === candidate?.id);
+        if (user.role !== 'admin') candidate.createdBy = existingRecord?.createdBy || user.id;
         if (user.role !== 'admin' && (!candidate?.projectId || !assignedProjectIds.has(candidate.projectId))) {
           return sendJson(res, 403, { success: false, error: 'You can only update records in your assigned projects' });
         }
@@ -744,7 +807,7 @@ const server = http.createServer((req, res) => requestContext.run(databaseDevice
   fs.readFile(filePath, (error, data) => {
     if (error) return sendJson(res, 404, { error: 'Not found' });
     const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
-    res.writeHead(200, { 'Content-Type': types[path.extname(filePath)] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff' });
+    res.writeHead(200, { 'Content-Type': types[path.extname(filePath)] || 'application/octet-stream', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
     if (req.method === 'HEAD') return res.end();
     res.end(data);
   });
