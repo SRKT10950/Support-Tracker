@@ -8,7 +8,7 @@ const { AsyncLocalStorage } = require('node:async_hooks');
 
 const scrypt = promisify(crypto.scrypt);
 
-const PORT = Number(process.env.PORT || 8080);
+const PORT = Number(process.env.PORT || 9011);
 const ROOT = __dirname;
 const required = [
   'DB_API_KEY',
