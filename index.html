@@ -6,7 +6,7 @@
   <title>Tracker</title>
     <link rel="stylesheet" href="/assets/app.css">
 </head>
-<body>
+<body data-page="tracker">
 
   <section id="view-startup-error" class="startup-error-view" aria-live="polite" style="display:none">
     <div class="login-box">
@@ -76,44 +76,7 @@
        2. MAIN APP SHELL
   ═══════════════════════════════════════ -->
   <section id="view-app" aria-label="Main Application">
-    <header class="app-header">
-      <div class="header-content">
-        <div class="brand-section">
-          <div class="brand-logo">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <polyline points="16 18 22 12 16 6"></polyline>
-              <polyline points="8 6 2 12 8 18"></polyline>
-            </svg>
-          </div>
-          <nav class="nav-tabs" aria-label="Application sections">
-            <button class="nav-tab active" id="tab-btn-tracker" onclick="switchView('tracker')">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
-              Tracker
-            </button>
-            <a class="nav-tab" href="/dashboard.html">Dashboard</a>
-            <a class="nav-tab" href="/support.html">Support Desk</a>
-            <a class="nav-tab" href="/my-tracker.html">My Tracker</a>
-            <button class="nav-tab" id="tab-btn-users" onclick="switchView('users')" style="display: none;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              User Management
-            </button>
-            <button class="nav-tab" id="tab-btn-projects" onclick="switchView('projects')" style="display: none;">Projects</button>
-          </nav>
-        </div>
-
-        <div class="user-profile">
-          <div class="user-avatar" id="current-user-avatar">AD</div>
-          <div class="user-details">
-            <span class="user-name" id="current-user-name">Admin User</span>
-            <span class="user-role" id="current-user-role">Administrator</span>
-          </div>
-          <button class="btn btn-secondary btn-sm" onclick="logout()" title="Sign Out">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            Logout
-          </button>
-        </div>
-      </div>
-    </header>
+    <div id="app-header-mount"></div>
 
     <main class="app-main">
       <!-- ── TRACKER SECTION ── -->
@@ -662,6 +625,7 @@
   <!-- ═══════════════════════════════════════
        JAVASCRIPT APPLICATION CORE
   ═══════════════════════════════════════ -->
+    <script src="/assets/header.js" defer></script>
     <script src="/assets/app.js" defer></script>
 </body>
 </html>

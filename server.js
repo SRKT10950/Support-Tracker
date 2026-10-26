@@ -149,6 +149,31 @@ function publicUser(user) {
   return { id: user.id, name: user.name, email: user.email, role: user.role, projectIds: Array.isArray(user.projectIds) ? user.projectIds : [] };
 }
 
+function stateForUser(user, state, scope = '') {
+  const assignedProjectIds = new Set(user.projectIds || []);
+  const myTrackerScope = scope === 'my-tracker';
+  const identity = new Set([user.id, user.name, user.email].map((value) => String(value || '').trim().toLowerCase()).filter(Boolean));
+  const records = state.records.filter((record) => {
+    if (myTrackerScope) {
+      const isNamedAssignee = [record.developer, record.owner].some((value) => {
+        const normalized = String(value || '').trim().toLowerCase();
+        return normalized && identity.has(normalized);
+      });
+      return record.createdBy === user.id || record.developerUserId === user.id || record.ownerUserId === user.id || isNamedAssignee;
+    }
+    if (user.role === 'admin') return true;
+    if (assignedProjectIds.has(record.projectId)) return true;
+    return false;
+  });
+  const visibleProjectIds = user.role === 'admin' ? null : new Set([...assignedProjectIds, ...records.map((record) => record.projectId).filter(Boolean)]);
+  return {
+    users: user.role === 'admin' ? state.users.map(publicUser) : [],
+    records,
+    projects: user.role === 'admin' ? state.projects : state.projects.filter((project) => visibleProjectIds.has(project.id)),
+    needsMigration: user.role === 'admin' && Boolean(state.needsMigration),
+  };
+}
+
 async function readJsonBody(req, maxBytes = 1024 * 1024) {
   const chunks = [];
   let size = 0;
@@ -396,15 +421,18 @@ async function writeAppState(state, previousState = null) {
 async function authenticatedUser(req) {
   const token = sessionToken(req);
   if (!token) return null;
-  const sessionResult = await databaseQuery(
-    'SELECT user_id FROM support_tracker_sessions WHERE token_hash = $1 AND expires_at > NOW()',
+  const sessionUser = resultRows(await databaseQuery(
+    'SELECT u.user_id, u.name, u.email, u.role FROM support_tracker_sessions s JOIN support_tracker_users u ON u.user_id = s.user_id AND u.is_active = TRUE WHERE s.token_hash = $1 AND s.expires_at > NOW()',
     [hashSessionToken(token)],
-  );
-  const sessionRow = resultRows(sessionResult)[0];
-  const userId = sessionRow?.user_id ?? sessionRow?.USER_ID;
-  if (!userId) return null;
-  const state = await readAppState();
-  return state?.users?.find((user) => user.id === userId) || null;
+  ))[0];
+  if (!sessionUser) return null;
+  const value = (key) => sessionUser[key] ?? sessionUser[key.toUpperCase()];
+  const user = { id: value('user_id'), name: value('name'), email: value('email'), role: value('role'), projectIds: [] };
+  if (user.role !== 'admin') {
+    const assignments = resultRows(await databaseQuery('SELECT up.project_id FROM support_tracker_user_projects up JOIN support_tracker_projects p ON p.project_id = up.project_id AND p.is_active = TRUE WHERE up.user_id = $1', [user.id]));
+    user.projectIds = assignments.map((row) => row.project_id ?? row.PROJECT_ID).filter(Boolean);
+  }
+  return user;
 }
 
 async function createServerSession(userId) {
@@ -545,6 +573,18 @@ const server = http.createServer((req, res) => requestContext.run(databaseDevice
       return sendJson(res, 200, { success: true, user: publicUser(user) });
     } catch (error) {
       return sendJson(res, error.statusCode || 502, { success: false, error: error.message || 'Login failed' });
+    }
+  }
+
+  if (new URL(req.url, 'http://localhost').pathname === '/api/bootstrap' && req.method === 'GET') {
+    try {
+      const user = await authenticatedUser(req);
+      if (!user) return sendJson(res, 401, { success: false, error: 'Session expired' });
+      const state = await readAppState();
+      const scope = new URL(req.url, 'http://localhost').searchParams.get('scope') || '';
+      return sendJson(res, 200, { success: true, user: publicUser(user), state: stateForUser(user, state, scope) });
+    } catch (error) {
+      return sendJson(res, error.statusCode || 503, { success: false, error: error.message || 'Could not load tracker data' });
     }
   }
 
@@ -703,27 +743,9 @@ const server = http.createServer((req, res) => requestContext.run(databaseDevice
       if (!user) return sendJson(res, 401, { success: false, error: 'Sign in required' });
       if (req.method === 'GET') {
         const state = await readAppState();
-        const assignedProjectIds = new Set(user.projectIds || []);
-        const myTrackerScope = new URL(req.url, 'http://localhost').searchParams.get('scope') === 'my-tracker';
-        const visibleRecords = user.role === 'admin' ? state.records : state.records.filter((record) => {
-          if (assignedProjectIds.has(record.projectId)) return true;
-          if (!myTrackerScope) return false;
-          const identity = new Set([user.id, user.name, user.email].map((value) => String(value || '').trim().toLowerCase()).filter(Boolean));
-          const isNamedAssignee = [record.developer, record.owner].some((value) => {
-            const normalized = String(value || '').trim().toLowerCase();
-            return normalized && identity.has(normalized);
-          });
-          return record.createdBy === user.id || record.developerUserId === user.id || record.ownerUserId === user.id || isNamedAssignee;
-        });
-        const visibleProjectIds = user.role === 'admin' ? null : new Set([...assignedProjectIds, ...visibleRecords.map((record) => record.projectId).filter(Boolean)]);
         return sendJson(res, 200, {
           success: true,
-          state: {
-            users: user.role === 'admin' ? state.users.map(publicUser) : [],
-            records: visibleRecords,
-            projects: user.role === 'admin' ? state.projects : state.projects.filter((project) => visibleProjectIds.has(project.id)),
-            needsMigration: user.role === 'admin' && Boolean(state.needsMigration),
-          },
+          state: stateForUser(user, state, new URL(req.url, 'http://localhost').searchParams.get('scope') || ''),
         });
       }
 

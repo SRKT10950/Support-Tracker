@@ -29,7 +29,7 @@
 
   function myRecords() {
     const identities = currentIdentity();
-    return records.filter(record => record.createdBy === user.id || [record.developer, record.owner].some(name => identities.has(String(name || '').trim().toLocaleLowerCase())));
+    return records.filter(record => record.createdBy === user.id || record.developerUserId === user.id || record.ownerUserId === user.id || [record.developer, record.owner].some(name => identities.has(String(name || '').trim().toLocaleLowerCase())));
   }
 
   function detailButton(recordsToOpen, label) {
@@ -258,21 +258,20 @@
 
   async function boot() {
     try {
-      const sessionResponse = await apiFetch('/api/session');
-      if (sessionResponse.status === 401) { window.location.href = `/?return=${encodeURIComponent(window.location.pathname)}`; return; }
-      const session = await sessionResponse.json().catch(() => ({}));
-      if (!sessionResponse.ok || !session.success || !session.user) throw new Error(session.error || `Session check failed (${sessionResponse.status})`);
-      user = session.user;
-      const stateResponse = await apiFetch(page === 'my-tracker' ? '/api/state?scope=my-tracker' : '/api/state');
-      if (stateResponse.status === 401) { window.location.href = `/?return=${encodeURIComponent(window.location.pathname)}`; return; }
-      const state = await stateResponse.json().catch(() => ({}));
-      if (!stateResponse.ok || !state.success) throw new Error(state.error || 'Unable to load tracker records');
+      const scope = page === 'my-tracker' ? '?scope=my-tracker' : '';
+      const bootstrapResponse = await apiFetch(`/api/bootstrap${scope}`);
+      if (bootstrapResponse.status === 401) { window.location.href = `/?return=${encodeURIComponent(window.location.pathname)}`; return; }
+      const bootstrap = await bootstrapResponse.json().catch(() => ({}));
+      if (!bootstrapResponse.ok || !bootstrap.success || !bootstrap.user || !bootstrap.state) throw new Error(bootstrap.error || `Could not restore the page (${bootstrapResponse.status})`);
+      user = bootstrap.user;
+      const state = { state: bootstrap.state };
       const projects = state.state.projects || [];
       const projectMap = new Map(projects.map(project => [project.id, project.name]));
       records = (state.state.records || []).map(record => ({ ...record, projectName: projectMap.get(record.projectId) || 'Unassigned' }));
       document.getElementById('current-user-name').textContent = user.name;
       document.getElementById('current-user-role').textContent = user.role;
       document.getElementById('current-user-avatar').textContent = user.name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase();
+      document.querySelectorAll('[data-admin-nav]').forEach(link => { link.style.display = user.role === 'admin' ? 'inline-flex' : 'none'; });
       if (page === 'dashboard') {
         ['filter-developer', 'filter-period', 'filter-year', 'filter-month', 'filter-day'].forEach(id => document.getElementById(id).addEventListener('change', renderDashboard));
         renderDashboard();

@@ -189,12 +189,15 @@
       }
     }
 
-    async function loadApplicationState() {
-      const response = await appFetch('/api/state', { headers: { Accept: 'application/json' } });
-      const result = await response.json();
-      if (!response.ok || !result.success) throw new Error(result.error || 'Could not load PostgreSQL data');
-
-      const remoteState = result.state || { users: [], records: [], projects: [], needsMigration: false };
+    async function loadApplicationState(bootstrapState = null) {
+      let remoteState = bootstrapState;
+      if (!remoteState) {
+        const response = await appFetch('/api/state', { headers: { Accept: 'application/json' } });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || 'Could not load tracker data');
+        remoteState = result.state;
+      }
+      remoteState = remoteState || { users: [], records: [], projects: [], needsMigration: false };
       projects = Array.isArray(remoteState.projects) ? remoteState.projects : [];
       if (remoteState.needsMigration && currentUser && currentUser.role === 'admin') {
         const mergedUsers = Array.isArray(remoteState.users) ? [...remoteState.users] : [];
@@ -243,7 +246,7 @@
 
     /* ── Authentication & Session ── */
     async function checkAuthSession() {
-      const response = await appFetch('/api/session', { headers: { Accept: 'application/json' } });
+      const response = await appFetch('/api/bootstrap', { headers: { Accept: 'application/json' } });
       if (response.status === 401) {
         showLoginView();
         return false;
@@ -253,9 +256,9 @@
         throw new Error(failure.error || `Session check failed (${response.status})`);
       }
       const result = await response.json();
-      if (!result.success || !result.user) throw new Error(result.error || 'The session response was incomplete');
+      if (!result.success || !result.user || !result.state) throw new Error(result.error || 'The tracker response was incomplete');
       currentUser = result.user;
-      await loadApplicationState();
+      await loadApplicationState(result.state);
       showAppView();
       return true;
     }
@@ -333,6 +336,8 @@
         renderUsersList();
         renderProjectsList();
       }
+      const requestedView = pageParams.get('view');
+      if (isAdmin && ['users', 'projects'].includes(requestedView)) switchView(requestedView);
     }
 
     document.getElementById('form-login').addEventListener('submit', async function(e) {
