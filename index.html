@@ -424,6 +424,7 @@
     .dashboard-metric { padding:.9rem 1rem; border-radius:var(--radius); background:var(--gray-50); border:1px solid var(--border); }
     .dashboard-metric strong { display:block; font-size:1.4rem; color:var(--gray-900); }
     .dashboard-metric span { color:var(--gray-600); font-size:.82rem; }
+    .dashboard-metric small { display:block; margin-top:.25rem; color:var(--gray-500); font-size:.72rem; }
     .dashboard-drill-card { text-align:left; width:100%; cursor:pointer; color:inherit; font:inherit; }
     .dashboard-drill-card:hover,.dashboard-drill:hover { border-color:var(--primary); background:var(--primary-light); color:var(--primary); }
     .dashboard-drill-card:focus-visible,.dashboard-drill:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
@@ -1113,6 +1114,7 @@
               Tracker
             </button>
             <button class="nav-tab" id="tab-btn-dashboard" onclick="switchView('dashboard')">Dashboard</button>
+            <button class="nav-tab" id="tab-btn-support" onclick="switchView('support')">Support Desk</button>
             <button class="nav-tab" id="tab-btn-users" onclick="switchView('users')" style="display: none;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               User Management
@@ -1163,6 +1165,17 @@
           <div class="dashboard-panel"><div class="dashboard-heading"><div><h2>Work aging</h2><p style="font-size:.8rem;color:var(--gray-500);">Age of ongoing requests, from creation date</p></div></div><div id="dashboard-aging"></div></div>
         </div>
         <div class="dashboard-panel"><div class="dashboard-heading"><h2>Developer workload</h2><span style="color:var(--gray-500);font-size:.82rem;">Open, active, rejected and overdue requests · click a number to open matching tracker rows</span></div><div id="dashboard-developers"></div></div>
+      </div>
+      <div id="section-support" style="display:none; flex-direction:column; gap:1rem;">
+        <div class="dashboard-panel">
+          <div class="dashboard-heading"><div><h2>Customer support overview</h2><p style="color:var(--gray-500);font-size:.82rem;">Customer requests, contract coverage, SLA exposure, and time-based billing. <a href="https://www.manageengine.com/products/service-desk/" target="_blank" rel="noopener noreferrer">ServiceDesk Plus</a> · <a href="https://www.manageengine.com/products/support-center/" target="_blank" rel="noopener noreferrer">SupportCenter Plus</a></p></div><button class="btn btn-primary btn-sm" onclick="openRecordModal()">New support request</button></div>
+          <div class="dashboard-grid" id="support-metrics"></div>
+        </div>
+        <div class="dashboard-analysis-grid">
+          <div class="dashboard-panel"><div class="dashboard-heading"><div><h2>Customer accounts</h2><p style="font-size:.8rem;color:var(--gray-500);">Requests and tracked support charges by account</p></div></div><div id="support-accounts"></div></div>
+          <div class="dashboard-panel"><div class="dashboard-heading"><div><h2>Support channels</h2><p style="font-size:.8rem;color:var(--gray-500);">Request volume across intake channels</p></div></div><div id="support-channels"></div></div>
+        </div>
+        <div class="dashboard-panel"><div class="dashboard-heading"><div><h2>SLA watchlist</h2><p style="font-size:.8rem;color:var(--gray-500);">Open requests past their SLA due date or due within 48 hours</p></div><button class="btn btn-secondary btn-sm" onclick="switchView('tracker')">View all tracker records</button></div><div id="support-sla-watch"></div></div>
       </div>
       <!-- ── TRACKER SECTION ── -->
       <div id="section-tracker" style="display: flex; flex-direction: column; gap: 1.25rem;">
@@ -1539,6 +1552,17 @@
                 <option value="Closed">Closed</option>
               </select>
             </div>
+
+            <div class="form-group span-full" style="border-top:1px solid var(--border);padding-top:1rem;margin-top:.25rem"><strong>Customer Support &amp; SLA</strong><span style="display:block;font-size:.78rem;color:var(--gray-500);margin-top:.2rem">Optional account, support plan, response target and billing details.</span></div>
+            <div class="form-group"><label for="rec-account">Customer account</label><input id="rec-account" class="form-control" placeholder="Company or customer name" list="support-account-list"><datalist id="support-account-list"></datalist></div>
+            <div class="form-group"><label for="rec-contact">Customer contact</label><input id="rec-contact" class="form-control" placeholder="Contact name or email"></div>
+            <div class="form-group"><label for="rec-channel">Support channel</label><select id="rec-channel" class="form-control"><option value="">Select channel</option><option>Email</option><option>Portal</option><option>Phone</option><option>Chat</option><option>Other</option></select></div>
+            <div class="form-group"><label for="rec-priority">Priority</label><select id="rec-priority" class="form-control"><option value="">Select priority</option><option>Low</option><option>Normal</option><option>High</option><option>Urgent</option></select></div>
+            <div class="form-group"><label for="rec-category">Support category</label><input id="rec-category" class="form-control" placeholder="Incident, access, how-to…" list="support-category-list"><datalist id="support-category-list"><option>Incident</option><option>Service Request</option><option>Access</option><option>How-to</option><option>Change</option></datalist></div>
+            <div class="form-group"><label for="rec-sla-date">SLA due date</label><input id="rec-sla-date" type="date" class="form-control"></div>
+            <div class="form-group"><label for="rec-contract">Support contract / plan</label><input id="rec-contract" class="form-control" placeholder="Contract or support plan"></div>
+            <div class="form-group"><label for="rec-time-spent">Time spent (minutes)</label><input id="rec-time-spent" type="number" min="0" step="1" class="form-control" value="0"></div>
+            <div class="form-group"><label for="rec-hourly-rate">Billing rate per hour</label><input id="rec-hourly-rate" type="number" min="0" step="0.01" class="form-control" placeholder="0.00"></div>
           </div>
         </div>
 
@@ -2044,17 +2068,20 @@
 
       document.getElementById('tab-btn-tracker').classList.toggle('active', isTracker);
       document.getElementById('tab-btn-dashboard').classList.toggle('active', tab === 'dashboard');
+      document.getElementById('tab-btn-support').classList.toggle('active', tab === 'support');
       document.getElementById('tab-btn-users').classList.toggle('active', isUsers);
       document.getElementById('tab-btn-projects').classList.toggle('active', tab === 'projects');
 
       document.getElementById('section-tracker').style.display = isTracker ? 'flex' : 'none';
       document.getElementById('section-dashboard').style.display = tab === 'dashboard' ? 'flex' : 'none';
+      document.getElementById('section-support').style.display = tab === 'support' ? 'flex' : 'none';
       document.getElementById('section-users').style.display = isUsers ? 'flex' : 'none';
       document.getElementById('section-projects').style.display = tab === 'projects' ? 'flex' : 'none';
 
       if (currentUser?.role === 'admin' && isUsers) renderUsersList();
       if (currentUser?.role === 'admin' && tab === 'projects') renderProjectsList();
       if (tab === 'dashboard') renderDashboard();
+      if (tab === 'support') renderSupportDesk();
     }
 
     function applyDashboardDrilldown(drillRecords, developer, description) {
@@ -2125,6 +2152,7 @@
         renderTable();
         if (currentUser?.role === 'admin') { renderUsersList(); renderProjectsList(); }
         renderDashboard();
+        if (activeTab === 'support') renderSupportDesk();
         showToast('Tracker data refreshed.', 'success');
       } catch (error) {
         showToast(`Refresh failed: ${error.message}`, 'error');
@@ -2260,6 +2288,53 @@
       const countButton = (name, metric, count) => `<button type="button" class="dashboard-drill" data-drill-developer="${escapeHTML(name)}" data-drill-metric="${metric}" title="Show ${count} ${escapeHTML(metric)} records for ${escapeHTML(name)} in Tracker">${count}</button>`;
       document.getElementById('dashboard-developers').innerHTML = rows.length ? `<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Developer</th><th>Total</th><th>Active</th><th>Rejected</th><th>Overdue</th><th>Deployed</th></tr></thead><tbody>${rows.map(([name,items]) => `<tr><td>${countButton(name,'total',escapeHTML(name))}</td><td>${countButton(name,'total',items.length)}</td><td>${countButton(name,'active',items.filter(r=>['Open','In Progress','In Review','Testing','In Deployment'].includes(r.status)).length)}</td><td>${countButton(name,'rejected',items.filter(r=>r.status==='Rejected').length)}</td><td>${countButton(name,'overdue',items.filter(r=>isOverdue(r.expectedProdDate,r.status)).length)}</td><td>${countButton(name,'deployed',items.filter(r=>r.status==='Deployed').length)}</td></tr>`).join('')}</tbody></table></div>` : '<p style="color:var(--gray-500);padding:.75rem 0">No requests for this selection.</p>';
       enableDashboardDrilldownProgress();
+    }
+
+    function renderSupportDesk() {
+      const active = records.filter(record => !['Deployed', 'Rejected'].includes(record.status));
+      const today = toLocalISODate();
+      const soon = new Date(); soon.setDate(soon.getDate() + 2);
+      const soonDate = toLocalISODate(soon);
+      const slaRisk = active.filter(record => record.slaDueDate && record.slaDueDate <= soonDate);
+      const billed = records.reduce((sum, record) => sum + (Math.max(0, Number(record.timeSpentMinutes) || 0) / 60) * Math.max(0, Number(record.hourlyRate) || 0), 0);
+      const money = value => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(value || 0);
+      const metric = (label, value, note) => `<div class="dashboard-metric"><span>${label}</span><strong>${value}</strong><small>${note}</small></div>`;
+      document.getElementById('support-metrics').innerHTML = [
+        metric('Customer accounts', new Set(records.map(r => String(r.customerAccount || '').trim()).filter(Boolean)).size, 'Distinct named accounts'),
+        metric('Open support requests', active.length, 'Requests still in progress'),
+        metric('SLA due / at risk', slaRisk.length, 'Overdue or due in the next 48 hours'),
+        metric('Tracked billable value', money(billed), 'Time spent × hourly rate'),
+      ].join('');
+
+      const accounts = new Map();
+      records.filter(r => String(r.customerAccount || '').trim()).forEach(record => {
+        const key = record.customerAccount.trim();
+        if (!accounts.has(key)) accounts.set(key, { records: [], amount: 0, open: 0 });
+        const item = accounts.get(key); item.records.push(record);
+        item.amount += (Math.max(0, Number(record.timeSpentMinutes) || 0) / 60) * Math.max(0, Number(record.hourlyRate) || 0);
+        if (!['Deployed', 'Rejected'].includes(record.status)) item.open++;
+      });
+      const accountRows = [...accounts.entries()].sort((a,b) => b[1].amount - a[1].amount || a[0].localeCompare(b[0]));
+      document.getElementById('support-accounts').innerHTML = accountRows.length ? `<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Account</th><th>Requests</th><th>Open</th><th>Tracked value</th><th>Support plans</th></tr></thead><tbody>${accountRows.map(([name, info]) => `<tr><td><button class="dashboard-drill" type="button" data-account-drill="${escapeHTML(name)}">${escapeHTML(name)}</button></td><td>${info.records.length}</td><td>${info.open}</td><td>${money(info.amount)}</td><td>${escapeHTML([...new Set(info.records.map(r => r.contractName).filter(Boolean))].join(', ') || '—')}</td></tr>`).join('')}</tbody></table></div>` : '<p style="color:var(--gray-500);padding:.75rem 0">Add a customer account to a support request to see account reporting.</p>';
+      document.getElementById('support-accounts').querySelectorAll('[data-account-drill]').forEach(button => bindProgressHandler(button, () => {
+        const account = button.dataset.accountDrill;
+        applyDashboardDrilldown(records.filter(r => r.customerAccount === account), '', `${account} support requests`);
+      }));
+
+      const channels = new Map();
+      records.forEach(record => { const name = record.supportChannel || 'Unspecified'; channels.set(name, (channels.get(name) || 0) + 1); });
+      const maxChannel = Math.max(1, ...channels.values());
+      document.getElementById('support-channels').innerHTML = [...channels.entries()].sort((a,b) => b[1] - a[1]).map(([name,count]) => `<div class="status-row"><span>${escapeHTML(name)}</span><div class="status-track"><div class="status-fill" style="width:${count/maxChannel*100}%"></div></div><strong><button class="dashboard-drill" type="button" data-channel-drill="${escapeHTML(name)}">${count}</button></strong></div>`).join('') || '<p style="color:var(--gray-500)">No support requests yet.</p>';
+      document.getElementById('support-channels').querySelectorAll('[data-channel-drill]').forEach(button => bindProgressHandler(button, () => {
+        const channel = button.dataset.channelDrill;
+        applyDashboardDrilldown(records.filter(r => (r.supportChannel || 'Unspecified') === channel), '', `${channel} requests`);
+      }));
+
+      const watch = slaRisk.sort((a,b) => String(a.slaDueDate).localeCompare(String(b.slaDueDate))).slice(0, 12);
+      document.getElementById('support-sla-watch').innerHTML = watch.length ? `<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Ticket</th><th>Customer</th><th>Priority</th><th>Owner</th><th>Status</th><th>SLA due</th><th>Exposure</th></tr></thead><tbody>${watch.map(record => `<tr><td><button class="dashboard-drill" type="button" data-ticket-id="${escapeHTML(record.id)}">${escapeHTML(record.trackerNo)} · ${escapeHTML(record.subject)}</button></td><td>${escapeHTML(record.customerAccount || '—')}</td><td>${escapeHTML(record.priority || '—')}</td><td>${escapeHTML(record.developer || '—')}</td><td>${escapeHTML(record.status)}</td><td>${formatDate(record.slaDueDate)}</td><td><span style="font-size:.75rem;font-weight:600;color:${record.slaDueDate < today ? 'var(--danger)' : 'var(--warning)'}">${record.slaDueDate < today ? 'Overdue' : 'Due soon'}</span></td></tr>`).join('')}</tbody></table></div>` : '<p style="color:var(--gray-500);padding:.75rem 0">No requests are overdue or due within 48 hours.</p>';
+      document.getElementById('support-sla-watch').querySelectorAll('[data-ticket-id]').forEach(button => bindProgressHandler(button, () => viewRecordDetails(button.dataset.ticketId)));
+      const accountNames = [...accounts.keys()].sort((a,b) => a.localeCompare(b));
+      document.getElementById('support-account-list').innerHTML = accountNames.map(name => `<option value="${escapeHTML(name)}"></option>`).join('');
     }
 
     function formatEmailDate(dateValue) {
@@ -2659,6 +2734,15 @@
         document.getElementById('rec-pr').value = item.releasePR || '';
         document.getElementById('rec-feature-branch').value = item.featureBranch || '';
         document.getElementById('rec-sfdc').value = item.sfdcStatus || '';
+        document.getElementById('rec-account').value = item.customerAccount || '';
+        document.getElementById('rec-contact').value = item.customerContact || '';
+        document.getElementById('rec-channel').value = item.supportChannel || '';
+        document.getElementById('rec-priority').value = item.priority || '';
+        document.getElementById('rec-category').value = item.category || '';
+        document.getElementById('rec-sla-date').value = item.slaDueDate || '';
+        document.getElementById('rec-contract').value = item.contractName || '';
+        document.getElementById('rec-time-spent').value = Number(item.timeSpentMinutes) || 0;
+        document.getElementById('rec-hourly-rate').value = Number(item.hourlyRate) || '';
       } else {
         document.getElementById('form-record').reset();
         populateRecordProjectOptions();
@@ -2694,6 +2778,15 @@
       const releasePR = document.getElementById('rec-pr').value.trim();
       const featureBranch = document.getElementById('rec-feature-branch').value.trim();
       const sfdcStatus = document.getElementById('rec-sfdc').value;
+      const customerAccount = document.getElementById('rec-account').value.trim();
+      const customerContact = document.getElementById('rec-contact').value.trim();
+      const supportChannel = document.getElementById('rec-channel').value;
+      const priority = document.getElementById('rec-priority').value;
+      const category = document.getElementById('rec-category').value.trim();
+      const slaDueDate = document.getElementById('rec-sla-date').value;
+      const contractName = document.getElementById('rec-contract').value.trim();
+      const timeSpentMinutes = Math.max(0, Number(document.getElementById('rec-time-spent').value) || 0);
+      const hourlyRate = Math.max(0, Number(document.getElementById('rec-hourly-rate').value) || 0);
 
       if (!trackerNo || !projectId || !department || !subject || !requestType || !developer || !status) {
         showToast('Please fill all required fields.', 'error');
@@ -2732,6 +2825,15 @@
             releasePR,
             featureBranch,
             sfdcStatus,
+            customerAccount,
+            customerContact,
+            supportChannel,
+            priority,
+            category,
+            slaDueDate,
+            contractName,
+            timeSpentMinutes,
+            hourlyRate,
             updatedAt: today
           };
         }
@@ -2756,6 +2858,15 @@
           releasePR,
           featureBranch,
           sfdcStatus,
+          customerAccount,
+          customerContact,
+          supportChannel,
+          priority,
+          category,
+          slaDueDate,
+          contractName,
+          timeSpentMinutes,
+          hourlyRate,
           createdDate: today
         };
         records.unshift(newRecord);
@@ -2775,6 +2886,7 @@
       updateStats();
       renderTable();
       renderDashboard();
+      if (activeTab === 'support') renderSupportDesk();
     }
 
     function confirmDeleteRecord(id) {
@@ -2802,6 +2914,7 @@
         updateStats();
         renderTable();
         renderDashboard();
+        if (activeTab === 'support') renderSupportDesk();
       });
 
       openModal('modal-confirm');
@@ -2828,6 +2941,14 @@
         { label: 'Developer', value: item.developer, span: false },
         { label: 'Status', value: item.status, span: false },
         { label: 'Business Approver Name', value: item.owner || '—', span: false },
+        { label: 'Customer Account', value: item.customerAccount || '—', span: false },
+        { label: 'Customer Contact', value: item.customerContact || '—', span: false },
+        { label: 'Support Channel', value: item.supportChannel || '—', span: false },
+        { label: 'Priority / Category', value: [item.priority, item.category].filter(Boolean).join(' · ') || '—', span: false },
+        { label: 'Support Contract / Plan', value: item.contractName || '—', span: false },
+        { label: 'SLA Due Date', value: formatDate(item.slaDueDate), span: false },
+        { label: 'Time Spent', value: Number(item.timeSpentMinutes) ? `${item.timeSpentMinutes} minutes` : '—', span: false },
+        { label: 'Hourly Billing Rate', value: Number(item.hourlyRate) ? new Intl.NumberFormat(undefined, { style: 'currency', currency: 'INR' }).format(item.hourlyRate) : '—', span: false },
         { label: 'Change Risk', value: item.changeRisk || '—', span: false },
         { label: 'Impacted Business Area', value: item.impactedBusinessArea || '—', span: false },
         { label: 'Remediation Strategy', value: item.remediationStrategy || '—', span: true },
