@@ -271,7 +271,8 @@
       document.getElementById('current-user-name').textContent = user.name;
       document.getElementById('current-user-role').textContent = user.role;
       document.getElementById('current-user-avatar').textContent = user.name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase();
-      document.querySelectorAll('[data-admin-nav]').forEach(link => { link.style.display = user.role === 'admin' ? 'inline-flex' : 'none'; });
+      const isAdmin = String(user.role || '').toLowerCase() === 'admin';
+      document.querySelectorAll('[data-admin-nav]').forEach(link => { link.style.display = isAdmin ? 'inline-flex' : 'none'; });
       if (page === 'dashboard') {
         ['filter-developer', 'filter-period', 'filter-year', 'filter-month', 'filter-day'].forEach(id => document.getElementById(id).addEventListener('change', renderDashboard));
         renderDashboard();

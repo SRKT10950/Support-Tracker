@@ -377,6 +377,7 @@
       display: flex;
       align-items: center;
       gap: 0.75rem;
+      min-width: 0;
     }
     .brand-logo {
       width: 32px;
@@ -391,6 +392,7 @@
     .nav-tabs {
       display: flex;
       gap: 0.5rem;
+      flex-wrap: wrap;
     }
     .nav-tab {
       padding: 0.45rem 0.9rem;
@@ -1034,6 +1036,7 @@
     ═══════════════════════════════════════ */
     @media (max-width: 768px) {
       .header-content { flex-direction: column; align-items: stretch; gap: 0.75rem; }
+      .brand-section { flex-wrap: wrap; }
       .form-grid-2, .details-grid { grid-template-columns: 1fr; }
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
       .toolbar-card { flex-direction: column; align-items: stretch; }
