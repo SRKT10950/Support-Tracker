@@ -27,9 +27,26 @@
     return new Set([user?.id, user?.name, user?.email].map(value => String(value || '').trim().toLocaleLowerCase()).filter(Boolean));
   }
 
+  async function withButtonProgress(button, action) {
+    const spinner = document.createElement('span');
+    spinner.className = 'button-spinner';
+    spinner.setAttribute('aria-hidden', 'true');
+    button.classList.add('is-processing');
+    button.setAttribute('aria-busy', 'true');
+    button.appendChild(spinner);
+    try { await action(); }
+    finally {
+      window.setTimeout(() => {
+        spinner.remove();
+        button.classList.remove('is-processing');
+        button.removeAttribute('aria-busy');
+      }, 140);
+    }
+  }
+
   function myRecords() {
     const identities = currentIdentity();
-    return records.filter(record => record.createdBy === user.id || record.developerUserId === user.id || record.ownerUserId === user.id || [record.developer, record.owner].some(name => identities.has(String(name || '').trim().toLocaleLowerCase())));
+    return records.filter(record => record.createdBy === user.id || record.developerUserId === user.id || record.ownerUserId === user.id || [record.developer, record.owner, record.approverName, record.businessApproverName, record.businessApprover].some(name => identities.has(String(name || '').trim().toLocaleLowerCase())));
   }
 
   function detailButton(recordsToOpen, label) {
@@ -212,14 +229,81 @@
     let selection = 'ongoing';
     const mine = myRecords();
     const closed = new Set(['Deployed', 'Rejected']);
+    let pageNumber = 1;
+    const search = document.getElementById('my-search');
+    const statusFilter = document.getElementById('my-status-filter');
+    const priorityFilter = document.getElementById('my-priority-filter');
+    const fromFilter = document.getElementById('my-from-date');
+    const toFilter = document.getElementById('my-to-date');
+    const sortFilter = document.getElementById('my-sort');
+    const pageSize = document.getElementById('my-page-size');
     const draw = () => {
-      const rows = mine.filter(record => selection === 'closed' ? closed.has(record.status) : !closed.has(record.status));
-      document.getElementById('my-ticket-count').textContent = `${rows.length} ${selection} request${rows.length === 1 ? '' : 's'}`;
+      const needle = search.value.trim().toLocaleLowerCase();
+      const filtered = mine.filter(record => {
+        if (selection === 'closed' ? !closed.has(record.status) : closed.has(record.status)) return false;
+        if (statusFilter.value && record.status !== statusFilter.value) return false;
+        if (priorityFilter.value && record.priority !== priorityFilter.value) return false;
+        const created = String(record.createdDate || '');
+        if (fromFilter.value && created < fromFilter.value) return false;
+        if (toFilter.value && created > toFilter.value) return false;
+        const haystack = [record.trackerNo, record.subject, record.projectName, record.developer, record.owner, record.approverName, record.businessApproverName].join(' ').toLocaleLowerCase();
+        return !needle || haystack.includes(needle);
+      }).sort((a, b) => {
+        const direction = sortFilter.value.endsWith('-asc') ? 1 : -1;
+        if (sortFilter.value.startsWith('priority')) {
+          const rank = { urgent: 4, high: 3, normal: 2, low: 1 };
+          return ((rank[String(a.priority || '').toLowerCase()] || 0) - (rank[String(b.priority || '').toLowerCase()] || 0)) * direction;
+        }
+        const field = sortFilter.value.startsWith('sla') ? 'slaDueDate' : 'createdDate';
+        return String(a[field] || '').localeCompare(String(b[field] || '')) * direction;
+      });
+      const totalPages = Math.max(1, Math.ceil(filtered.length / Number(pageSize.value)));
+      pageNumber = Math.min(pageNumber, totalPages);
+      const rows = filtered.slice((pageNumber - 1) * Number(pageSize.value), pageNumber * Number(pageSize.value));
+      const today = todayIso();
+      const dueSoon = new Date(); dueSoon.setDate(dueSoon.getDate() + 2);
+      const dueSoonIso = todayIsoFrom(dueSoon);
+      const overdueCount = mine.filter(record => record.slaDueDate && record.slaDueDate < today && !closed.has(record.status)).length;
+      const dueSoonCount = mine.filter(record => record.slaDueDate && record.slaDueDate >= today && record.slaDueDate <= dueSoonIso && !closed.has(record.status)).length;
+      document.getElementById('my-ticket-count').textContent = `${filtered.length} matching ${selection} request${filtered.length === 1 ? '' : 's'} · page ${pageNumber} of ${totalPages}`;
+      document.getElementById('my-ticket-summary').innerHTML = [
+        ['Ongoing', mine.filter(record => !closed.has(record.status)).length], ['Closed', mine.filter(record => closed.has(record.status)).length], ['Overdue SLA', overdueCount], ['Due in 48h', dueSoonCount],
+      ].map(([label, count]) => `<div class="dashboard-metric"><strong>${count}</strong><span>${label}</span></div>`).join('');
+      document.getElementById('my-prev-page').disabled = pageNumber <= 1;
+      document.getElementById('my-next-page').disabled = pageNumber >= totalPages;
       document.querySelectorAll('[data-my-view]').forEach(button => button.classList.toggle('active', button.dataset.myView === selection));
-      document.getElementById('my-ticket-list').innerHTML = rows.length ? `<div style="overflow-x:auto"><table class="report-table"><thead><tr><th>Ticket</th><th>Subject</th><th>Project</th><th>Developer</th><th>Status</th><th>Created</th><th>Expected</th></tr></thead><tbody>${rows.map(record => `<tr><td><button class="ticket-link" type="button" data-ticket="${escapeHtml(record.id)}">${escapeHtml(record.trackerNo)}</button></td><td>${escapeHtml(record.subject)}</td><td>${escapeHtml(record.projectName || '—')}</td><td>${escapeHtml(record.developer || '—')}</td><td>${escapeHtml(record.status)}</td><td>${dateLabel(record.createdDate)}</td><td>${dateLabel(record.expectedProdDate)}</td></tr>`).join('')}</tbody></table></div>` : `<p class="empty-note">No ${selection} requests are assigned to or created by you.</p>`;
-      document.querySelectorAll('[data-ticket]').forEach(button => button.addEventListener('click', () => showTicket(rows.find(record => record.id === button.dataset.ticket))));
+      document.getElementById('my-ticket-list').innerHTML = rows.length ? `<div style="overflow-x:auto"><table class="report-table"><thead><tr><th>Ticket</th><th>Subject</th><th>Project</th><th>Developer</th><th>Business approver</th><th>Status</th><th>Priority</th><th>SLA due</th><th>Created</th><th>Expected deployment</th></tr></thead><tbody>${rows.map(record => {
+        const late = record.slaDueDate && record.slaDueDate < today && !closed.has(record.status);
+        return `<tr class="${late ? 'sla-overdue-row' : ''}"><td><button class="ticket-link" type="button" data-ticket="${escapeHtml(record.id)}">${escapeHtml(record.trackerNo)}</button></td><td>${escapeHtml(record.subject)}</td><td>${escapeHtml(record.projectName || '—')}</td><td>${escapeHtml(record.developer || '—')}</td><td>${escapeHtml(record.businessApproverName || record.approverName || record.owner || '—')}</td><td><span class="status-pill">${escapeHtml(record.status)}</span></td><td>${escapeHtml(record.priority || '—')}</td><td>${dateLabel(record.slaDueDate)}${late ? ' · Overdue' : ''}</td><td>${dateLabel(record.createdDate)}</td><td>${dateLabel(record.expectedProdDate)}</td></tr>`;
+      }).join('')}</tbody></table></div>` : `<p class="empty-note">No ${selection} requests match these filters.</p>`;
+      document.querySelectorAll('[data-ticket]').forEach(button => button.addEventListener('click', () => withButtonProgress(button, () => showTicket(rows.find(record => record.id === button.dataset.ticket)))));
+      window.myTrackerExportRows = filtered;
     };
-    document.querySelectorAll('[data-my-view]').forEach(button => button.addEventListener('click', () => { selection = button.dataset.myView; draw(); }));
+    document.querySelectorAll('[data-my-view]').forEach(button => button.addEventListener('click', () => withButtonProgress(button, () => { selection = button.dataset.myView; pageNumber = 1; draw(); })));
+    [search, fromFilter, toFilter].forEach(control => control.addEventListener('input', () => { pageNumber = 1; draw(); }));
+    [statusFilter, priorityFilter, sortFilter, pageSize].forEach(control => control.addEventListener('change', () => { pageNumber = 1; draw(); }));
+    document.getElementById('my-prev-page').addEventListener('click', event => withButtonProgress(event.currentTarget, () => { pageNumber--; draw(); }));
+    document.getElementById('my-next-page').addEventListener('click', event => withButtonProgress(event.currentTarget, () => { pageNumber++; draw(); }));
+    document.getElementById('my-export').addEventListener('click', event => withButtonProgress(event.currentTarget, () => {
+      const headers = ['Ticket', 'Subject', 'Project', 'Developer', 'Owner / Approver', 'Status', 'Priority', 'SLA Due', 'Created', 'Expected Deployment'];
+      const csvCell = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
+      const csv = [headers, ...window.myTrackerExportRows.map(record => [record.trackerNo, record.subject, record.projectName, record.developer, record.businessApproverName || record.approverName || record.owner, record.status, record.priority, record.slaDueDate, record.createdDate, record.expectedProdDate])].map(row => row.map(csvCell).join(',')).join('\r\n');
+      const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); link.download = `my-tracker-${selection}-${todayIso()}.csv`; link.click(); URL.revokeObjectURL(link.href);
+    }));
+    document.getElementById('my-copy-tickets').addEventListener('click', event => withButtonProgress(event.currentTarget, async () => {
+      const text = (window.myTrackerExportRows || []).map(record => record.trackerNo).join('\n');
+      try {
+        if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+        else { const helper = document.createElement('textarea'); helper.value = text; helper.style.position = 'fixed'; helper.style.opacity = '0'; document.body.appendChild(helper); helper.select(); document.execCommand('copy'); helper.remove(); }
+        document.getElementById('my-copy-status').textContent = 'Filtered ticket numbers copied.';
+      } catch { document.getElementById('my-copy-status').textContent = 'Could not access clipboard. Select a ticket number to copy it manually.'; }
+    }));
+    document.getElementById('my-refresh').addEventListener('click', event => withButtonProgress(event.currentTarget, () => window.location.reload()));
+    document.addEventListener('keydown', event => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); search.focus(); }
+      if (event.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) { event.preventDefault(); search.focus(); }
+      if (event.key === 'Escape' && document.activeElement === search && search.value) { search.value = ''; pageNumber = 1; draw(); }
+    });
     draw();
   }
 
@@ -228,7 +312,7 @@
     document.getElementById('ticket-dialog-title').textContent = `${record.trackerNo} · ${record.subject}`;
     const fields = [
       ['Project', record.projectName], ['Department', record.department], ['Type', record.requestType], ['Status', record.status],
-      ['Developer', record.developer], ['Owner', record.owner], ['Created', dateLabel(record.createdDate)], ['Expected deployment', dateLabel(record.expectedProdDate)],
+      ['Developer', record.developer], ['Business approver', record.businessApproverName || record.approverName || record.owner], ['Created', dateLabel(record.createdDate)], ['Expected deployment', dateLabel(record.expectedProdDate)],
       ['Actual deployment', dateLabel(record.prodDeployDate)], ['Customer account', record.customerAccount], ['Priority', record.priority], ['SLA due', dateLabel(record.slaDueDate)],
       ['Support plan', record.contractName], ['Comment', record.comment],
     ];

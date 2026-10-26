@@ -155,7 +155,7 @@ function stateForUser(user, state, scope = '') {
   const identity = new Set([user.id, user.name, user.email].map((value) => String(value || '').trim().toLowerCase()).filter(Boolean));
   const records = state.records.filter((record) => {
     if (myTrackerScope) {
-      const isNamedAssignee = [record.developer, record.owner].some((value) => {
+      const isNamedAssignee = [record.developer, record.owner, record.approverName, record.businessApproverName, record.businessApprover].some((value) => {
         const normalized = String(value || '').trim().toLowerCase();
         return normalized && identity.has(normalized);
       });
@@ -393,7 +393,7 @@ async function readAppState() {
   const projects = resultRows(projectsResult).map((row) => ({ id: value(row, 'project_id'), name: value(row, 'name'), type: value(row, 'project_type'), startDate: date(value(row, 'start_date')), endDate: date(value(row, 'end_date')) }));
   const records = resultRows(recordsResult).map((row) => ({
     id: value(row, 'record_id'), projectId: value(row, 'project_id') || '', trackerNo: value(row, 'tracker_no'), department: value(row, 'department'), subject: value(row, 'subject'),
-    requestType: value(row, 'request_type'), developer: value(row, 'developer'), status: normalizeTrackerStatus(value(row, 'status')), owner: value(row, 'owner') || '',
+    requestType: value(row, 'request_type'), developer: value(row, 'developer'), status: normalizeTrackerStatus(value(row, 'status')), owner: value(row, 'owner') || '', businessApproverName: value(row, 'owner') || '',
     changeRisk: value(row, 'change_risk') || '', impactedBusinessArea: value(row, 'impacted_business_area') || '',
     remediationStrategy: value(row, 'remediation_strategy') || '', comment: value(row, 'deployment_comment') || '',
     expectedProdDate: date(value(row, 'expected_prod_date')), prodDeployDate: date(value(row, 'prod_deploy_date')),
@@ -422,8 +422,8 @@ async function authenticatedUser(req) {
   const token = sessionToken(req);
   if (!token) return null;
   const sessionUser = resultRows(await databaseQuery(
-    'SELECT u.user_id, u.name, u.email, u.role FROM support_tracker_sessions s JOIN support_tracker_users u ON u.user_id = s.user_id AND u.is_active = TRUE WHERE s.token_hash = $1 AND s.expires_at > NOW()',
-    [hashSessionToken(token)],
+    'UPDATE support_tracker_sessions s SET expires_at = NOW() + ($2 * INTERVAL \'1 second\') FROM support_tracker_users u WHERE s.token_hash = $1 AND s.expires_at > NOW() AND u.user_id = s.user_id AND u.is_active = TRUE RETURNING u.user_id, u.name, u.email, u.role',
+    [hashSessionToken(token), SESSION_TTL_SECONDS],
   ))[0];
   if (!sessionUser) return null;
   const value = (key) => sessionUser[key] ?? sessionUser[key.toUpperCase()];
@@ -582,6 +582,7 @@ const server = http.createServer((req, res) => requestContext.run(databaseDevice
       if (!user) return sendJson(res, 401, { success: false, error: 'Session expired' });
       const state = await readAppState();
       const scope = new URL(req.url, 'http://localhost').searchParams.get('scope') || '';
+      setSessionCookie(req, res, sessionToken(req), SESSION_TTL_SECONDS);
       return sendJson(res, 200, { success: true, user: publicUser(user), state: stateForUser(user, state, scope) });
     } catch (error) {
       return sendJson(res, error.statusCode || 503, { success: false, error: error.message || 'Could not load tracker data' });
@@ -806,7 +807,7 @@ const server = http.createServer((req, res) => requestContext.run(databaseDevice
   fs.readFile(filePath, (error, data) => {
     if (error) return sendJson(res, 404, { error: 'Not found' });
     const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
-    res.writeHead(200, { 'Content-Type': types[path.extname(filePath)] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff' });
+    res.writeHead(200, { 'Content-Type': types[path.extname(filePath)] || 'application/octet-stream', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
     if (req.method === 'HEAD') return res.end();
     res.end(data);
   });
